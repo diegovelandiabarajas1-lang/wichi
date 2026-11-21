@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wichi</title>
+<meta name="description" content="Wichi: tu asistente de IA, en el iPhone.">
+<meta name="theme-color" content="#10151c">
+<meta name="color-scheme" content="dark light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wichi">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app" class="app">
+
+  <!-- Conexión: cuentas guardadas y añadir una -->
+  <section id="v-cuentas" class="vista" hidden>
+    <header class="barra">
+      <img src="icons/icon-192.png" alt="" class="logo">
+      <h1>Wichi</h1>
+    </header>
+    <main class="cuerpo">
+      <p class="suave">Elige una cuenta o añade una. Cada cuenta lleva el nombre que tú le pongas; «En la nube» o «Mi PC» solo indica cómo se conecta.</p>
+      <div id="aviso-instalar" class="tarjeta" hidden>
+        <strong>Instálala en tu iPhone</strong>
+        <p class="suave">En Safari toca <span class="chip">Compartir ⬆︎</span> y luego <span class="chip">Añadir a pantalla de inicio</span>. Se abrirá como una app, sin barra del navegador.</p>
+      </div>
+      <div id="lista-cuentas" class="lista"></div>
+      <button id="btn-añadir" class="btn principal ancho">＋ Añadir cuenta</button>
+      <p id="aviso-https" class="aviso" hidden></p>
+    </main>
+  </section>
+
+  <!-- Conversaciones -->
+  <section id="v-inicio" class="vista" hidden>
+    <header class="barra">
+      <button id="btn-cuentas" class="icono" aria-label="Cuentas">☰</button>
+      <div class="titulo"><span id="nombre-cuenta">Wichi</span><small id="estado-conexion"></small></div>
+      <button id="btn-clave" class="icono" aria-label="Clave de NVIDIA" title="Clave de NVIDIA">🔑</button>
+    </header>
+    <main class="cuerpo">
+      <button id="btn-nueva" class="btn principal ancho">✎ Nueva conversación</button>
+      <div id="aviso-clave" class="aviso" hidden>Este servidor aún no tiene tu clave de NVIDIA. Toca 🔑 para guardarla.</div>
+      <h2 class="seccion">Conversaciones</h2>
+      <div id="lista-sesiones" class="lista"></div>
+    </main>
+  </section>
+
+  <!-- Chat -->
+  <section id="v-chat" class="vista" hidden>
+    <header class="barra">
+      <button id="btn-atras" class="icono" aria-label="Volver">‹</button>
+      <div class="titulo"><span id="titulo-chat">Conversación</span><small id="modelo-chat"></small></div>
+      <button id="btn-parar" class="icono" aria-label="Detener" hidden>■</button>
+    </header>
+    <div id="permisos"></div>
+    <main id="mensajes" class="mensajes" aria-live="polite"></main>
+    <form id="form-envio" class="envio">
+      <textarea id="entrada" rows="1" placeholder="Pregúntale a Wichi" enterkeyhint="send" autocomplete="off"></textarea>
+      <button id="btn-enviar" class="btn principal" type="submit" aria-label="Enviar">➤</button>
+    </form>
+  </section>
+
+  <div id="toast" class="toast" hidden></div>
+</div>
+
+<!-- Diálogo: añadir cuenta -->
+<dialog id="dlg-cuenta">
+  <form method="dialog" id="form-cuenta">
+    <h3 id="dlg-cuenta-titulo">Añadir cuenta</h3>
+    <label>Nombre de la cuenta<input id="c-nombre" placeholder="El que tú quieras" autocomplete="off" required></label>
+    <div class="fila-chips" role="radiogroup" aria-label="Tipo">
+      <label class="chipradio"><input type="radio" name="c-tipo" value="cowork" checked><span>☁ En la nube</span></label>
+      <label class="chipradio"><input type="radio" name="c-tipo" value="local"><span>🖥 Mi PC</span></label>
+    </div>
+    <label>Dirección<input id="c-url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…onrender.com" required></label>
+    <label>Contraseña<input id="c-clave" type="password" autocomplete="off" autocapitalize="off" required></label>
+    <p class="suave pequeno" id="c-ayuda"></p>
+    <menu>
+      <button type="button" class="btn" id="c-cancelar">Cancelar</button>
+      <button type="submit" class="btn principal">Añadir y conectar</button>
+    </menu>
+  </form>
+</dialog>
+
+<!-- Diálogo: renombrar -->
+<dialog id="dlg-renombrar">
+  <form method="dialog" id="form-renombrar">
+    <h3>Renombrar cuenta</h3>
+    <label>Nombre<input id="r-nombre" autocomplete="off" required></label>
+    <menu>
+      <button type="button" class="btn" id="r-cancelar">Cancelar</button>
+      <button type="submit" class="btn principal">Guardar</button>
+    </menu>
+  </form>
+</dialog>
+
+<!-- Diálogo: clave de NVIDIA -->
+<dialog id="dlg-clave">
+  <form method="dialog" id="form-clave">
+    <h3>Clave de NVIDIA</h3>
+    <p class="suave pequeno">Se guarda en el servidor al que estás conectado, no en este teléfono. Es gratis: build.nvidia.com → «Generate API Key». Empieza por nvapi-</p>
+    <label>Clave<input id="k-clave" type="password" autocomplete="off" autocapitalize="off" placeholder="nvapi-…" required></label>
+    <menu>
+      <button type="button" class="btn" id="k-cancelar">Cancelar</button>
+      <button type="submit" class="btn principal">Guardar en el servidor</button>
+    </menu>
+  </form>
+</dialog>
+
+<script src="app.js" defer></script>
+</body>
+</html>
