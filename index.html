@@ -42,11 +42,14 @@
     <header class="barra">
       <button id="btn-cuentas" class="icono" aria-label="Cuentas">☰</button>
       <div class="titulo"><span id="nombre-cuenta">Wichi</span><small id="estado-conexion"></small></div>
-      <button id="btn-clave" class="icono" aria-label="Clave de NVIDIA" title="Clave de NVIDIA">🔑</button>
+      <button id="btn-consumo" class="icono" aria-label="Consumo de tokens" title="Consumo de tokens"><img src="icons/consumo.png" alt="" class="ico-img"></button>
+      <button id="btn-ajustes" class="icono" aria-label="Ajustes" title="Ajustes">⚙</button>
     </header>
     <main class="cuerpo">
       <button id="btn-nueva" class="btn principal ancho">✎ Nueva conversación</button>
+      <div id="aviso-restaurado" class="aviso" hidden></div>
       <div id="aviso-clave" class="aviso" hidden>Este servidor aún no tiene tu clave de NVIDIA. Toca 🔑 para guardarla.</div>
+      <input id="buscar" type="search" class="buscar" placeholder="Buscar conversaciones" autocomplete="off">
       <h2 class="seccion">Conversaciones</h2>
       <div id="lista-sesiones" class="lista"></div>
     </main>
@@ -56,15 +59,39 @@
   <section id="v-chat" class="vista" hidden>
     <header class="barra">
       <button id="btn-atras" class="icono" aria-label="Volver">‹</button>
-      <div class="titulo"><span id="titulo-chat">Conversación</span><small id="modelo-chat"></small></div>
+      <div class="titulo"><span id="titulo-chat">Conversación</span><button id="modelo-chat" class="modelo-btn" type="button" aria-label="Cambiar de modelo"></button></div>
+      <button id="btn-entregas" class="icono" aria-label="Archivos del agente" title="Archivos del agente">📁</button>
       <button id="btn-parar" class="icono" aria-label="Detener" hidden>■</button>
     </header>
     <div id="permisos"></div>
     <main id="mensajes" class="mensajes" aria-live="polite"></main>
+    <div id="menu-comandos" class="menu-comandos" hidden></div>
+    <div id="adjuntos" class="adjuntos" hidden></div>
     <form id="form-envio" class="envio">
+      <button id="btn-adjuntar" class="icono" type="button" aria-label="Adjuntar archivo">📎</button>
+      <input id="in-archivos" type="file" multiple hidden>
       <textarea id="entrada" rows="1" placeholder="Pregúntale a Wichi" enterkeyhint="send" autocomplete="off"></textarea>
       <button id="btn-enviar" class="btn principal" type="submit" aria-label="Enviar">➤</button>
     </form>
+  </section>
+
+  <!-- Ajustes -->
+  <section id="v-ajustes" class="vista" hidden>
+    <header class="barra">
+      <button id="aj-atras" class="icono" aria-label="Volver">‹</button>
+      <div class="titulo"><span>Ajustes</span></div>
+    </header>
+    <main class="cuerpo" id="aj-cuerpo"></main>
+  </section>
+
+  <!-- Consumo de tokens -->
+  <section id="v-consumo" class="vista" hidden>
+    <header class="barra">
+      <button id="co-atras" class="icono" aria-label="Volver">‹</button>
+      <div class="titulo"><span>Consumo de tokens</span><small id="co-sub"></small></div>
+      <button id="co-refrescar" class="icono" aria-label="Actualizar">↻</button>
+    </header>
+    <main class="cuerpo" id="co-cuerpo"></main>
   </section>
 
   <div id="toast" class="toast" hidden></div>
@@ -114,6 +141,58 @@
   </form>
 </dialog>
 
+<!-- Diálogo: modelo -->
+<dialog id="dlg-modelo">
+  <h3>Modelo</h3>
+  <p class="suave pequeno">Solo se muestran los de proveedores activos en el servidor.</p>
+  <div id="lista-modelos" class="lista"></div>
+  <menu><button type="button" class="btn" id="m-cerrar">Cerrar</button></menu>
+</dialog>
+
+<!-- Diálogo: acciones de una conversación -->
+<dialog id="dlg-sesion">
+  <h3 id="ds-titulo">Conversación</h3>
+  <div class="lista">
+    <button class="btn ancho" id="ds-renombrar">Renombrar</button>
+    <button class="btn ancho" id="ds-archivar">Archivar (ocultar de la lista)</button>
+    <button class="btn ancho peligro" id="ds-borrar">Eliminar</button>
+  </div>
+  <menu><button type="button" class="btn" id="ds-cerrar">Cerrar</button></menu>
+</dialog>
+<dialog id="dlg-ren-sesion">
+  <form method="dialog" id="form-ren-sesion">
+    <h3>Renombrar conversación</h3>
+    <label>Título<input id="rs-titulo" autocomplete="off" required></label>
+    <menu><button type="button" class="btn" id="rs-cancelar">Cancelar</button><button type="submit" class="btn principal">Guardar</button></menu>
+  </form>
+</dialog>
+
+<!-- Diálogo: archivos del agente (carpeta «entregas») -->
+<dialog id="dlg-entregas">
+  <h3>Archivos del agente</h3>
+  <p class="suave pequeno">Lo que Wichi dejó en la carpeta «entregas» de esta conversación.</p>
+  <div id="lista-entregas" class="lista"></div>
+  <menu><button type="button" class="btn" id="e-actualizar">Actualizar</button><button type="button" class="btn principal" id="e-cerrar">Cerrar</button></menu>
+</dialog>
+<dialog id="dlg-imagen">
+  <h3 id="im-titulo">Imagen</h3>
+  <img id="im-img" alt="" class="vista-img">
+  <menu><button type="button" class="btn" id="im-cerrar">Cerrar</button><button type="button" class="btn principal" id="im-guardar">Guardar / compartir</button></menu>
+</dialog>
+
+<!-- Diálogo: añadir conector -->
+<dialog id="dlg-conector">
+  <form method="dialog" id="form-conector">
+    <h3>Añadir conector</h3>
+    <p class="suave pequeno">Conecta una app con API (servidor MCP): el agente podrá usarla como herramienta. Se guarda en el servidor.</p>
+    <label>Nombre<input id="cn-nombre" autocomplete="off" autocapitalize="off" placeholder="mi-app" required></label>
+    <label>Dirección<input id="cn-url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…/mcp" required></label>
+    <label>Llave (opcional)<input id="cn-llave" type="password" autocomplete="off" autocapitalize="off"></label>
+    <menu><button type="button" class="btn" id="cn-cancelar">Cancelar</button><button type="submit" class="btn principal">Añadir</button></menu>
+  </form>
+</dialog>
+
 <script src="app.js" defer></script>
+<script src="funciones.js" defer></script>
 </body>
 </html>

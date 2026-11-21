@@ -96,3 +96,38 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; ma
 .chipradio span { display: inline-block; padding: 8px 12px; border-radius: 999px; background: var(--panel2); color: var(--texto); font-size: 14px; }
 .chipradio input:checked + span { background: var(--acento); color: var(--acento-t); font-weight: 600; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + var(--seg-bot)); background: #000c; color: #fff; padding: 10px 14px; border-radius: 12px; font-size: 14px; max-width: 90vw; z-index: 20; }
+
+/* ───── paridad con la app de Android ───── */
+:root { --c-in: #4aa3ff; --c-out: #2bb98c; --c-rz: #f2b84b; }
+.ico-img { width: 24px; height: 24px; vertical-align: middle; }
+.buscar { width: 100%; margin-top: 14px; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--borde); background: var(--panel); color: var(--texto); font-size: 16px; }
+.modelo-btn { background: none; border: 0; padding: 0; color: var(--suave); font: inherit; font-size: 12px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.modelo-btn::after { content: ' ▾'; }
+.btn.peligro { color: var(--error); }
+.btn.opcion { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; font-weight: 500; }
+.btn.opcion small { color: var(--suave); font-weight: 400; }
+.btn.opcion.elegido { outline: 2px solid var(--acento); }
+.adjuntos { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 10px 0; background: var(--fondo); }
+.chip-adj { background: var(--panel2); border-radius: 999px; padding: 4px 6px 4px 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+.chip-adj button { background: none; border: 0; color: var(--suave); font-size: 14px; padding: 2px 6px; }
+.menu-comandos { margin: 0 10px; background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; }
+.menu-comandos .cmd { display: flex; flex-direction: column; align-items: flex-start; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--borde); color: var(--texto); padding: 8px 12px; font: inherit; text-align: left; }
+.menu-comandos .cmd:last-child { border-bottom: 0; }
+.menu-comandos .cmd small { color: var(--suave); font-size: 12px; }
+.vista-img { width: 100%; max-height: 60vh; object-fit: contain; border-radius: 10px; background: var(--fondo); }
+#btn-entregas.con-algo { box-shadow: inset 0 0 0 2px var(--acento); }
+.fila-btn { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.tarjeta .btn.ancho { margin-top: 10px; }
+.pestanas { display: flex; gap: 6px; margin-bottom: 12px; }
+.pestana { flex: 1; background: var(--panel2); color: var(--texto); border: 0; border-radius: 999px; padding: 9px 0; font-size: 15px; }
+.pestana.activa { background: var(--acento); color: var(--acento-t); font-weight: 600; }
+.tarjeta-num { background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; padding: 12px 14px; margin: 8px 0; }
+.t-titulo { color: var(--suave); font-size: 13px; }
+.t-num { font-size: 28px; font-weight: 700; }
+.t-det { color: var(--suave); font-size: 12.5px; }
+.tabla { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; }
+.tabla td { padding: 9px 12px; border-bottom: 1px solid var(--borde); font-size: 14px; }
+.tabla td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.tabla tr:last-child td { border-bottom: 0; }
+.leyenda { display: flex; gap: 12px; font-size: 12px; color: var(--suave); margin-top: 4px; flex-wrap: wrap; }
+.leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; }

@@ -231,7 +231,7 @@ const S = {
 };
 
 function vista(id) {
-  for (const v of ['v-cuentas', 'v-inicio', 'v-chat']) $(v).hidden = v !== id;
+  for (const v of ['v-cuentas', 'v-inicio', 'v-chat', 'v-ajustes', 'v-consumo']) $(v).hidden = v !== id;
 }
 
 /* ───────────── pantalla: cuentas ───────────── */
@@ -299,7 +299,7 @@ async function conectar(c) {
     await cargarSesiones();
     $('estado-conexion').textContent = 'conectado';
     iniciarEventos();
-    void comprobarClave();
+    void comprobarClave().then(() => { if (window.Extra) Extra.alConectar(); });
   } catch (e) {
     $('estado-conexion').textContent = '';
     toast(e.message, 8000);
@@ -318,8 +318,10 @@ async function comprobarClave() {
 
 async function cargarSesiones() {
   const r = await S.api.get('/api/session?limit=200&order=desc');
-  S.sesiones = ((r && r.data) || []).map(parseSesion).filter((s) => !s.archived);
+  const todas = ((r && r.data) || []).map(parseSesion);
+  S.sesiones = todas.filter((s) => !s.archived);
   pintarSesiones();
+  if (window.Extra) await Extra.alCargarSesiones(todas);
 }
 function fechaCorta(ms) {
   if (!ms) return '';
@@ -330,11 +332,14 @@ function fechaCorta(ms) {
 function pintarSesiones() {
   const lista = $('lista-sesiones');
   lista.innerHTML = '';
-  if (!S.sesiones.length) lista.innerHTML = '<p class="suave">Aún no hay conversaciones.</p>';
-  for (const s of S.sesiones) {
+  const q = (($('buscar') && $('buscar').value) || '').trim().toLowerCase();
+  const vistas = q ? S.sesiones.filter((s) => (s.title + ' ' + s.directory + ' ' + s.model).toLowerCase().includes(q)) : S.sesiones;
+  if (!vistas.length) lista.innerHTML = '<p class="suave">' + (q ? 'Nada coincide.' : 'Aún no hay conversaciones.') + '</p>';
+  for (const s of vistas) {
     const el = document.createElement('div');
     el.className = 'item';
-    el.innerHTML = `<div class="txt"><div class="t1">${esc(s.title)}</div><div class="t2">${esc(fechaCorta(s.updated))} · ${esc(s.directory || '')}</div></div>`;
+    el.innerHTML = `<div class="txt"><div class="t1">${esc(s.title)}</div><div class="t2">${esc(fechaCorta(s.updated))} · ${esc(s.directory || '')}</div></div><button class="mini" data-a="mas" aria-label="Más acciones">⋯</button>`;
+    el.querySelector('[data-a=mas]').addEventListener('click', (e) => { e.stopPropagation(); if (window.Extra) Extra.accionesSesion(s); });
     el.setAttribute('role', 'button'); el.tabIndex = 0;
     el.addEventListener('click', () => abrirSesion(s));
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirSesion(s); } });
@@ -366,6 +371,7 @@ async function abrirSesion(s) {
   } catch { /* opcional */ }
   pintarBusy();
   void cargarPermisosPendientes();
+  if (window.Extra) Extra.alAbrirSesion(s);
 }
 
 async function refrescarChat() {
@@ -492,7 +498,7 @@ function manejarEvento(ev) {
   switch (type) {
     case 'session.execution.started': S.busy = true; pintarBusy(); break;
     case 'session.execution.succeeded': case 'session.execution.failed': case 'session.execution.interrupted':
-      S.busy = false; pintarBusy(); setTimeout(() => void refrescarChat(), 300); void cargarSesiones().catch(() => {}); break;
+      S.busy = false; pintarBusy(); setTimeout(() => void refrescarChat(), 300); void cargarSesiones().catch(() => {}); if (window.Extra) Extra.alTurno(sid); break;
     case 'session.text.started': upsert(kt, () => ({ kind: 'text', key: kt, text: '' })); break;
     case 'session.text.delta': upsert(kt, (o) => ({ kind: 'text', key: kt, text: ((o && o.text) || '') + String(data.delta || '') })); break;
     case 'session.reasoning.started': upsert(kr, () => ({ kind: 'reasoning', key: kr, text: '' })); break;
@@ -552,22 +558,30 @@ async function asegurarNvidia() {
   try {
     if (S.needsKey === undefined) await comprobarClave();
     if (S.needsKey !== false) return;
+    // Se pregunta al servidor el modelo REAL de la conversación (el texto local puede no traer el proveedor).
     const real = ((await S.api.get(`/api/session/${s.id}`)).data || {}).model;
     if (real && real.providerID === 'nvidia') return;
-    if (!S.nvidia) {
-      const r = await S.api.get('/api/model?types=chat');
-      const lista = ((r && r.data) || []).filter((m) => m.providerID === 'nvidia');
-      S.nvidia = lista.find((m) => /ultra|nemotron/i.test(m.id)) || lista[0] || null;
-    }
-    if (!S.nvidia) return;
-    await S.api.post(`/api/session/${s.id}/model`, { model: { id: S.nvidia.id, providerID: S.nvidia.providerID } });
-    $('modelo-chat').textContent = `nvidia/${S.nvidia.id}`;
+    const m = window.Extra ? await Extra.modeloPreferido() : null;
+    if (!m) return;
+    await S.api.post(`/api/session/${s.id}/model`, { model: { id: m.id, providerID: m.providerID } });
+    $('modelo-chat').textContent = `${m.providerID}/${m.id}`;
   } catch { /* se intenta igual */ }
 }
 
 async function enviar(texto) {
-  texto = texto.trim(); if (!texto || !S.actual) return;
-  if (S.needsKey === true && !texto.startsWith('/')) { nota('El servidor no tiene tu clave de NVIDIA. Guárdala con el botón 🔑 de la lista de conversaciones.'); return; }
+  texto = texto.trim();
+  const hayAdj = !!(window.Extra && Extra.adjuntos.length);
+  if ((!texto && !hayAdj) || !S.actual) return;
+  // La clave de NVIDIA pegada en el mensaje se guarda en el servidor y NO se manda al modelo.
+  const clave = texto.match(/nvapi-[A-Za-z0-9_-]{20,}/);
+  if (clave && window.Extra) {
+    S.items.push({ kind: 'user', key: 'local:' + Date.now(), text: 'nvapi-••••••••••••', files: [] }); pintarMensajes(true);
+    const resto = texto.replace(clave[0], '').trim();
+    await Extra.guardarClave(clave[0]);
+    if (resto) void enviar(resto);
+    return;
+  }
+  if (S.needsKey === true && !texto.startsWith('/')) { nota('El servidor no tiene tu clave de NVIDIA. Guárdala en Ajustes o pégala aquí en el chat.'); return; }
   S.busy = true; pintarBusy();
   try {
     if (texto.startsWith('/')) {
@@ -575,15 +589,20 @@ async function enviar(texto) {
       S.items.push({ kind: 'user', key: 'local:' + Date.now(), text: texto, files: [] }); pintarMensajes(true);
       await S.api.post(`/api/session/${S.actual.id}/command`, { name: nombre, text: resto });
     } else {
-      S.items.push({ kind: 'user', key: 'local:' + Date.now(), text: texto, files: [] }); pintarMensajes(true);
+      const adj = window.Extra ? await Extra.prepararAdjuntos(texto) : { text: texto, files: [], nombres: [] };
+      S.items.push({ kind: 'user', key: 'local:' + Date.now(), text: texto || adj.text, files: adj.nombres }); pintarMensajes(true);
       await asegurarNvidia();
-      await S.api.post(`/api/session/${S.actual.id}/prompt`, { text: texto });
+      const cuerpo = { text: adj.text };
+      if (adj.files.length) cuerpo.files = adj.files;
+      await S.api.post(`/api/session/${S.actual.id}/prompt`, cuerpo);
     }
   } catch (e) { S.busy = false; pintarBusy(); nota('No se pudo enviar: ' + e.message); }
 }
 
 /* ───────────── eventos de la interfaz ───────────── */
 function ajustarAltura() { const t = $('entrada'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px'; }
+
+function abrirClave() { $('form-clave').reset(); $('dlg-clave').showModal(); }
 
 function iniciarUI() {
   $('btn-añadir').addEventListener('click', () => abrirDialogoCuenta());
@@ -604,20 +623,17 @@ function iniciarUI() {
   });
   $('btn-cuentas').addEventListener('click', () => { detenerEventos(); S.api = null; pintarCuentas(); });
   $('btn-nueva').addEventListener('click', () => void nuevaSesion());
-  $('btn-atras').addEventListener('click', () => { S.actual = null; S.permisos = S.permisos; vista('v-inicio'); void cargarSesiones().catch(() => {}); });
+  $('btn-atras').addEventListener('click', () => { if (window.Extra && S.actual) Extra.alCerrarChat(S.actual.id); S.actual = null; vista('v-inicio'); void cargarSesiones().catch(() => {}); });
   $('btn-parar').addEventListener('click', async () => { try { await S.api.post(`/api/session/${S.actual.id}/interrupt`); } catch (e) { toast('No se pudo detener: ' + e.message); } });
-  $('btn-clave').addEventListener('click', () => { $('form-clave').reset(); $('dlg-clave').showModal(); });
+  $('aviso-clave').addEventListener('click', () => abrirClave());
+  $('buscar').addEventListener('input', pintarSesiones);
   $('k-cancelar').addEventListener('click', () => $('dlg-clave').close());
   $('form-clave').addEventListener('submit', async (e) => {
     e.preventDefault();
     const k = $('k-clave').value.trim();
     $('dlg-clave').close();
     if (k.length < 11) { toast('Pega la clave completa.'); return; }
-    try {
-      await S.api.post('/api/integration/nvidia/connect/key', { key: k, label: 'Wichi PWA' });
-      S.needsKey = false; $('aviso-clave').hidden = true; S.nvidia = null;
-      toast('Clave guardada en el servidor «' + S.cuenta.name + '».');
-    } catch (err) { toast('No se pudo guardar la clave: ' + err.message, 6000); }
+    if (window.Extra) await Extra.guardarClave(k);
   });
   $('form-envio').addEventListener('submit', (e) => {
     e.preventDefault();

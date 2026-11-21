@@ -1,7 +1,7 @@
 'use strict';
 // Service worker de la PWA de Wichi: guarda lo básico para abrir sin conexión y NUNCA toca las llamadas al servidor (API).
-const VERSION = 'wichi-pwa-0.5.19';
-const BASICO = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
+const VERSION = 'wichi-pwa-0.5.19-2';
+const BASICO = ['./', 'index.html', 'app.css', 'app.js', 'funciones.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/apple-touch-icon.png', 'icons/consumo.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(BASICO)).then(() => self.skipWaiting()));
