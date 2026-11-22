@@ -1,4 +1,5 @@
 'use strict';
+const VERSION_PWA = '0.6.0';
 /* Wichi PWA: funciones que igualan a la app de Android (APK).
    Modelos, comandos «/», adjuntos, archivos del agente (entregas), conectores (MCP), consumo de tokens,
    respaldo de conversaciones, renombrar/archivar/eliminar y ajustes. Todo vive en este dispositivo (IndexedDB y localStorage). */
@@ -116,7 +117,7 @@ Object.assign(Api.prototype, {
         await api.post('/api/integration/nvidia/connect/key', { key: k, label: 'Wichi PWA' });
         if (esEfimero(S.cuenta)) Sec.poner(S.cuenta.url, { nvidia: k });
         try { await api.putBytes('/api/experimental/fs/write?path=' + enc('/root/.wichi/nvidia.key'), new TextEncoder().encode(k)); } catch { /* opcional */ }
-        S.needsKey = false; $('aviso-clave').hidden = true;
+        S.needsKey = false; if (window.Shell) { if (silencioso) Shell.pintarClave(); else Shell.claveGuardada(); }
         this.modelos = []; this.preferido = null;
         await this.cargarModelos().catch(() => {});
         if (S.actual && this.preferido && !S.elegidoAMano) await this.cambiarModelo(this.preferido, true);
@@ -161,7 +162,7 @@ Object.assign(Api.prototype, {
       try {
         await S.api.post(`/api/session/${S.actual.id}/model`, { model: { id: m.id, providerID: m.providerID } });
         S.actual = { ...S.actual, model: `${m.providerID}/${m.id}` };
-        $('modelo-chat').textContent = S.actual.model;
+        $('modelo-chat').textContent = (S.actual.model || '').split('/').pop();
         if (!auto) S.elegidoAMano = true;
       } catch (e) { toast('No se pudo cambiar el modelo: ' + e.message, 5000); }
     },
@@ -208,16 +209,19 @@ Object.assign(Api.prototype, {
 
     /* ───────────── adjuntos ───────────── */
     pintarAdjuntos() {
-      const el = $('adjuntos');
-      el.hidden = !this.adjuntos.length;
-      el.innerHTML = '';
-      this.adjuntos.forEach((a, i) => {
-        const c = document.createElement('span'); c.className = 'chip-adj';
-        c.textContent = (a.esImagen ? '🖼 ' : '📎 ') + a.name;
-        const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Quitar ' + a.name);
-        x.addEventListener('click', () => { this.adjuntos.splice(i, 1); this.pintarAdjuntos(); });
-        c.appendChild(x); el.appendChild(c);
-      });
+      for (const id of ['adjuntos', 'h-adjuntos']) {
+        const el = $(id);
+        el.hidden = !this.adjuntos.length;
+        el.innerHTML = '';
+        this.adjuntos.forEach((a, i) => {
+          const c = document.createElement('span'); c.className = 'chip-adj';
+          c.textContent = (a.esImagen ? '🖼 ' : '📎 ') + a.name;
+          const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Quitar ' + a.name);
+          x.addEventListener('click', () => { this.adjuntos.splice(i, 1); this.pintarAdjuntos(); });
+          c.appendChild(x); el.appendChild(c);
+        });
+      }
+      if (window.Shell) Shell.actualizarComposer();
     },
     esTexto(f) {
       const ext = (f.name.split('.').pop() || '').toLowerCase();
@@ -273,7 +277,7 @@ Object.assign(Api.prototype, {
         const r = await S.api.get('/api/fs/list?path=' + enc(dirDe() + '/entregas'));
         this.entregas = ((r && r.data) || []).filter((x) => x.type === 'file').map((x) => String(x.path).split('/').pop()).sort();
       } catch { this.entregas = []; }
-      $('btn-entregas').classList.toggle('con-algo', this.entregas.length > 0);
+      const be = $('btn-entregas'); be.hidden = !this.entregas.length; be.classList.toggle('con-algo', this.entregas.length > 0); be.textContent = '📁 Archivos del agente (' + this.entregas.length + ')';
       if (!silencioso) this.pintarEntregas();
     },
     pintarEntregas() {
@@ -523,28 +527,56 @@ Object.assign(Api.prototype, {
     /* ───────────── ajustes ───────────── */
     async abrirAjustes() { vista('v-ajustes'); this.pintarAjustes(); await this.cargarConectores(); this.pintarAjustes(); },
     pintarAjustes() {
-      const c = S.cuenta;
+      const c = S.cuenta; const ses = Sesion.leer();
       const estadoSw = !('serviceWorker' in navigator) ? 'no disponible en este navegador' : (navigator.serviceWorker.controller ? 'activo' : 'se activa al abrirla otra vez');
+      const servidor = c ? esc(c.name || c.url) : 'este servidor';
+      const cuentas = Cuentas.lista.map((x, i) => `<div class="item col"><div class="txt"><div class="t1">${x.kind === 'cowork' ? '☁' : '🖥'} ${esc(x.name)}</div><div class="t2">${esc(x.url)}</div></div>
+          <button class="mini" type="button" data-cr="${i}">Renombrar</button><button class="mini" type="button" data-cq="${i}">QR</button><button class="mini" type="button" data-co="${i}">Olvidar</button></div>`).join('');
       $('aj-cuerpo').innerHTML = `
-        <div class="tarjeta"><strong>Cuenta activa</strong><p class="suave">${c ? (c.kind === 'cowork' ? '☁ ' : '🖥 ') + esc(c.name) + '<br><small>' + esc(c.url) + '</small>' : '—'}</p>
-          <div class="fila-btn"><button class="btn" id="aj-cuentas">Cuentas…</button><button class="btn" id="aj-clave">Clave de NVIDIA</button></div></div>
-        <div class="tarjeta"><strong>Conectores</strong>
-          <p class="suave pequeno">Apps con API (servidores MCP) que el agente puede usar como herramientas.</p>
-          <div id="aj-conectores">${this.conectores.length ? this.conectores.map((x) => `<div class="item"><div class="txt"><div class="t1">${esc(x.name)}</div><div class="t2">${esc(x.estado)}${x.detalle ? ' · ' + esc(x.detalle) : ''}</div></div><button class="mini" data-q="${esc(x.name)}">Quitar</button></div>`).join('') : '<p class="suave pequeno">Ninguno todavía.</p>'}</div>
-          <button class="btn ancho" id="aj-add-con">＋ Añadir conector</button></div>
-        <div class="tarjeta"><strong>Copia de seguridad</strong>
-          <p class="suave pequeno">Si tu servidor gratuito se reinicia y pierde las conversaciones, esta app las devuelve (se guardan en este dispositivo). <span id="aj-resp-n"></span></p>
-          <button class="btn ancho" id="aj-resp">Copiar ahora todas las conversaciones</button></div>
-        <div class="tarjeta"><strong>Actualizaciones</strong>
-          <p class="suave pequeno">Versión 0.5.19 · uso sin conexión: ${estadoSw}. Esta app se actualiza sola al abrirla con internet.</p>
-          <button class="btn ancho" id="aj-act">Buscar actualización</button></div>
-        <div class="tarjeta"><strong>Avisos</strong>
-          <p class="suave pequeno">En el iPhone las notificaciones de una app web necesitan un servidor que las envíe, y esta versión no lo trae. Para saber si Wichi terminó, abre la app: se pone al día sola.</p></div>`;
+        <div class="tarjeta"><h3>Avisarme del agente</h3>
+          <p>En el iPhone las notificaciones de una app web necesitan un servidor que las envíe, y esta versión no lo trae. Para saber si Wichi terminó, abre la app: se pone al día sola.</p></div>
+        <div class="tarjeta"><h3>Mi clave de NVIDIA</h3>
+          <p>Se guarda en el servidor «${servidor}» (no en el teléfono) y Wichinion la usará para los modelos de NVIDIA. Si ese servidor es el PC de otra persona, le cambiarías su clave: úsalo solo en tu propio servidor.</p>
+          <label class="campo"><span class="con-boton"><input id="aj-nv" type="password" placeholder="nvapi-…" autocomplete="off" autocapitalize="off"><button type="button" id="aj-nv-ver">Ver</button></span></label>
+          <div class="fila-btn"><button class="btn principal" id="aj-nv-guardar" type="button" disabled>Guardar en el servidor</button></div>
+          <p id="aj-nv-msg"></p></div>
+        ${ses
+          ? `<div class="tarjeta"><h3>Mi cuenta</h3><p>Sesión iniciada como «${esc(ses.nombre)}». Tu nombre y tu contraseña son también el usuario y la contraseña de tu servidor Wichinion. Se guardan solo en este dispositivo.</p><div class="fila-btn"><button class="btn texto" id="aj-cerrar-sesion" type="button">Cerrar sesión</button></div></div>`
+          : `<div class="tarjeta"><h3>Mi cuenta</h3><p>Sin cuenta en este dispositivo.</p><div class="fila-btn"><button class="btn tonal" id="aj-crear-cuenta" type="button">Crear cuenta o iniciar sesión</button></div></div>`}
+        <div class="tarjeta"><h3>Actualizaciones</h3>
+          <p>Versión ${VERSION_PWA} · uso sin conexión: ${estadoSw}. Esta app se actualiza sola al abrirla con internet.</p>
+          <div class="fila-btn"><button class="btn tonal" id="aj-act" type="button">Buscar actualización</button></div></div>
+        <div class="tarjeta"><h3>Voz y música</h3>
+          <p>El botón «Hablar» abre el modo de voz: hablas, Wichi responde en voz alta y puede abrir enlaces, preparar mensajes, buscar música y más (cada acción te pide un «Sí»). En un iPhone una web no puede escuchar «Hey Wichi», ni crear alarmas, ni cambiar el volumen del teléfono.</p></div>
+        <div id="aj-spotify"></div>
+        <div class="tarjeta"><h3>Conectores</h3>
+          <p>Conecta apps con API (servidores MCP) al servidor: el agente podrá usarlas como herramientas. La llave se guarda en el servidor y una copia en este dispositivo, para volver a ponerla si Render reinicia.</p>
+          <div id="aj-conectores">${this.conectores.length ? this.conectores.map((x) => `<div class="item"><div class="txt"><div class="t1">${esc(x.name)}</div><div class="t2">${esc(x.estado)}${x.detalle ? ' · ' + esc(x.detalle) : ''}</div></div><button class="mini" type="button" data-q="${esc(x.name)}">Quitar</button></div>`).join('') : '<p>Ninguno todavía.</p>'}</div>
+          <div class="fila-btn"><button class="btn tonal" id="aj-add-con" type="button">＋ Añadir conector</button></div></div>
+        <div class="tarjeta"><h3>Copia de seguridad</h3>
+          <p>Si tu servidor gratuito se reinicia y pierde las conversaciones, esta app las devuelve (se guardan en este dispositivo). <span id="aj-resp-n"></span></p>
+          <div class="fila-btn"><button class="btn tonal" id="aj-resp" type="button">Copiar ahora todas las conversaciones</button></div></div>
+        <div class="tarjeta"><h3>Cuentas</h3>
+          <p>Cada cuenta lleva el nombre que tú le pongas. Cloud o Mi VPS solo indica el tipo de conexión.</p>
+          ${cuentas || '<p>Ninguna todavía.</p>'}
+          <div class="fila-btn"><button class="btn tonal" id="aj-add-cuenta" type="button">＋ Añadir cuenta</button><button class="btn tonal" id="aj-escanear" type="button">Escanear QR</button></div>
+          <div class="fila-btn"><button class="btn texto" id="aj-guias" type="button">Crear mi propio servidor (Render o VPS)</button><button class="btn texto" id="aj-cambiar" type="button">Cambiar de servidor</button></div></div>`;
       const $$ = (s) => $('aj-cuerpo').querySelector(s);
-      $$('#aj-cuentas').addEventListener('click', () => { detenerEventos(); pintarCuentas(); });
-      $$('#aj-clave').addEventListener('click', abrirClave);
+      // clave de NVIDIA
+      const nv = $$('#aj-nv'), guardar = $$('#aj-nv-guardar');
+      nv.addEventListener('input', () => { guardar.disabled = nv.value.trim().length <= 10; });
+      $$('#aj-nv-ver').addEventListener('click', (e) => { const ver = nv.type === 'password'; nv.type = ver ? 'text' : 'password'; e.target.textContent = ver ? 'Ocultar' : 'Ver'; });
+      guardar.addEventListener('click', async () => { const k = nv.value.trim(); nv.value = ''; guardar.disabled = true; await this.guardarClave(k); $$('#aj-nv-msg').textContent = S.needsKey === false ? 'Clave guardada en el servidor.' : ''; });
+      // cuenta de Wichi
+      const cs = $$('#aj-cerrar-sesion'); if (cs) cs.addEventListener('click', () => { if (confirm('¿Cerrar sesión? Se olvida el nombre y la contraseña de este dispositivo; tus servidores guardados no se tocan.')) { Sesion.cerrar(); this.pintarAjustes(); } });
+      const cc = $$('#aj-crear-cuenta'); if (cc) cc.addEventListener('click', () => { if (window.Guias) Guias.cuenta(); });
+      $$('#aj-act').addEventListener('click', () => void this.buscarActualizacion());
+      // Spotify
+      if (window.Spotify) Spotify.pintarTarjeta($$('#aj-spotify'));
+      // conectores
       $$('#aj-add-con').addEventListener('click', () => { $('form-conector').reset(); $('dlg-conector').showModal(); });
       $('aj-cuerpo').querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => { if (confirm(`¿Quitar el conector «${b.dataset.q}»?`)) void this.quitarConector(b.dataset.q); }));
+      // copia de seguridad
       $$('#aj-resp').addEventListener('click', async () => {
         if (!esEfimero(S.cuenta)) { toast('Este servidor no se reinicia: no hace falta la copia.', 4000); return; }
         toast('Copiando…', 2000);
@@ -552,7 +584,14 @@ Object.assign(Api.prototype, {
         void this.contarRespaldos();
         toast('Copia lista.');
       });
-      $$('#aj-act').addEventListener('click', () => void this.buscarActualizacion());
+      // cuentas
+      $('aj-cuerpo').querySelectorAll('[data-cr]').forEach((b) => b.addEventListener('click', () => pedirRenombrar(Cuentas.lista[Number(b.dataset.cr)])));
+      $('aj-cuerpo').querySelectorAll('[data-cq]').forEach((b) => b.addEventListener('click', () => { if (window.Qr) Qr.mostrarCuenta(Cuentas.lista[Number(b.dataset.cq)]); }));
+      $('aj-cuerpo').querySelectorAll('[data-co]').forEach((b) => b.addEventListener('click', () => { const x = Cuentas.lista[Number(b.dataset.co)]; if (x && confirm(`¿Olvidar la cuenta «${x.name}»? Solo se borra de este dispositivo.`)) { Cuentas.olvidar(x); this.pintarAjustes(); if (window.Shell) Shell.pintarPanel(); } }));
+      $$('#aj-add-cuenta').addEventListener('click', () => abrirDialogoCuenta());
+      $$('#aj-escanear').addEventListener('click', () => { if (window.Qr) Qr.escanear(); });
+      $$('#aj-guias').addEventListener('click', () => { if (window.Guias) { if (Sesion.leer()) Guias.hospedaje(); else Guias.cuenta(); } });
+      $$('#aj-cambiar').addEventListener('click', () => { detenerEventos(); S.api = null; pintarCuentas(); });
       void this.contarRespaldos();
     },
     async contarRespaldos() {
@@ -574,10 +613,8 @@ Object.assign(Api.prototype, {
 
   /* ───────────── cableado de la interfaz ───────────── */
   const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
-  on('btn-ajustes', 'click', () => void E.abrirAjustes());
-  on('aj-atras', 'click', () => vista('v-inicio'));
-  on('btn-consumo', 'click', () => void E.abrirConsumo());
-  on('co-atras', 'click', () => vista('v-inicio'));
+  on('aj-atras', 'click', () => { vista('v-inicio'); if (window.Shell) Shell.pintarInicio(); });
+  on('co-atras', 'click', () => { vista('v-inicio'); if (window.Shell) Shell.pintarInicio(); });
   on('co-refrescar', 'click', () => { toast('Actualizando…', 1500); void E.escanearConsumo(S.sesiones, true).then(() => E.pintarConsumo()); });
   on('modelo-chat', 'click', () => void E.abrirModelos());
   on('m-cerrar', 'click', () => $('dlg-modelo').close());
@@ -586,7 +623,6 @@ Object.assign(Api.prototype, {
   on('e-cerrar', 'click', () => $('dlg-entregas').close());
   on('im-cerrar', 'click', () => $('dlg-imagen').close());
   on('im-guardar', 'click', () => { if (E._blob) void E.guardarBlob(E._blob.nombre, E._blob.blob); });
-  on('btn-adjuntar', 'click', () => $('in-archivos').click());
   on('in-archivos', 'change', (e) => { void E.añadirArchivos([...e.target.files]); e.target.value = ''; });
   on('entrada', 'input', () => E.pintarComandos());
   on('ds-cerrar', 'click', () => $('dlg-sesion').close());

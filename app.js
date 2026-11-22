@@ -4,7 +4,25 @@
    Sin dependencias ni compilación. Los datos (cuentas) viven solo en este dispositivo (localStorage). */
 
 const $ = (id) => document.getElementById(id);
-const LS = { cuentas: 'wichi.cuentas', actual: 'wichi.actual' };
+const LS = { cuentas: 'wichi.cuentas', actual: 'wichi.actual', usuario: 'wichi.usuario' };
+
+/* ───────────── la cuenta de Wichi (nombre + contraseña), como en el APK ─────────────
+ * Son también el usuario y la contraseña de TU servidor Wichinion. Se guardan solo en este dispositivo. */
+const Sesion = {
+  MIN_CLAVE: 12,
+  leer() { try { const u = JSON.parse(leerLS(LS.usuario) || 'null'); return u && u.nombre && u.clave ? u : null; } catch { return null; } },
+  guardar(nombre, clave) { guardarLS(LS.usuario, JSON.stringify({ nombre: nombre.trim(), clave })); },
+  cerrar() { try { localStorage.removeItem(LS.usuario); } catch { /* nada */ } },
+  /** null si todo está bien; si no, el mensaje. `repetir` es undefined al iniciar sesión. */
+  validar(nombre, clave, repetir) {
+    const n = (nombre || '').trim();
+    if (n.length < 3 || n.length > 32) return 'El nombre debe tener entre 3 y 32 caracteres.';
+    if (!/^[\p{L}\p{N}._-]+$/u.test(n)) return 'El nombre solo puede llevar letras, números, punto, guion y guion bajo (sin espacios).';
+    if ((clave || '').length < Sesion.MIN_CLAVE) return `La contraseña debe tener al menos ${Sesion.MIN_CLAVE} caracteres (así lo exige Wichinion).`;
+    if (repetir !== undefined && clave !== repetir) return 'Las contraseñas no coinciden.';
+    return null;
+  },
+};
 
 /* ───────────── utilidades ───────────── */
 const enc = encodeURIComponent;
@@ -41,11 +59,12 @@ const Cuentas = {
     if (tipo === 'local' && !/:\d+(\/|$)/.test(u.replace(/^https?:\/\//i, ''))) u += ':4096';
     return u.replace(/\/+$/, '');
   },
-  añadir(nombre, tipo, url, clave) {
+  /** tipo: «cowork» (☁ en la nube: Render), «vps» (🖥 Mi VPS) o «local» (antiguo «Mi PC», se trata como VPS). user: el usuario de Wichinion (el nombre de tu cuenta; «opencode» en los servidores de siempre). */
+  añadir(nombre, tipo, url, clave, user) {
     const u = this.normalizarUrl(url, tipo);
     let host = u; try { host = new URL(u).host; } catch { /* queda la dirección */ }
     const previo = this.lista.find((x) => x.url === u); // volver a añadir la misma dirección la reemplaza sin cambiarle el nombre
-    const c = { name: this.nombreLibre(nombre || host, previo), kind: tipo === 'local' ? 'local' : 'cowork', url: u, password: clave.trim() };
+    const c = { name: this.nombreLibre(nombre || host, previo), kind: tipo === 'local' ? 'local' : tipo === 'vps' ? 'vps' : 'cowork', url: u, password: clave.trim(), user: (user || '').trim() || 'opencode' };
     this.lista = this.lista.filter((x) => x.url !== c.url).concat(c);
     this.guardar();
     return c;
@@ -58,9 +77,9 @@ const Cuentas = {
 class ApiError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
 
 class Api {
-  constructor(base, password) {
+  constructor(base, password, user) {
     this.base = base.trim().replace(/\/+$/, '');
-    this.auth = 'Basic ' + b64('opencode:' + password);
+    this.auth = 'Basic ' + b64((user || 'opencode') + ':' + password);
   }
   headers(extra) { return { Authorization: this.auth, Accept: 'application/json', ...(extra || {}) }; }
   async fail(res) {
@@ -171,7 +190,7 @@ function parseMensajes(arr) {
   const out = [];
   for (const m of arr) {
     if (m.type === 'user') {
-      out.push({ kind: 'user', key: String(m.id), text: String(m.text || ''), files: (m.files || []).map((f) => String(f.name || 'archivo')) });
+      out.push({ kind: 'user', key: String(m.id), text: window.Acciones ? Acciones.quitarProtocolo(String(m.text || '')) : String(m.text || ''), files: (m.files || []).map((f) => String(f.name || 'archivo')) });
     } else if (m.type === 'assistant') {
       (m.content || []).forEach((p, i) => {
         const key = `${m.id}:${i}`;
@@ -228,40 +247,43 @@ const S = {
   sesiones: [], actual: null, items: [], busy: false, permisos: [],
   needsKey: undefined, nvidia: null, elegidoAMano: false,
   abortEventos: null, conectando: 0,
+  antes: [], cursorAntes: null, cargandoAntes: false, tokens: '', offline: false, pegado: true,
 };
 
+const VISTAS = ['v-cuentas', 'v-inicio', 'v-historial', 'v-chat', 'v-ajustes', 'v-consumo'];
 function vista(id) {
-  for (const v of ['v-cuentas', 'v-inicio', 'v-chat', 'v-ajustes', 'v-consumo']) $(v).hidden = v !== id;
+  for (const v of VISTAS) $(v).hidden = v !== id;
+  if (window.Shell) Shell.alCambiarVista(id);
 }
 
-/* ───────────── pantalla: cuentas ───────────── */
+/* ───────────── pantalla: conectar (como ConnectScreen del APK) ───────────── */
 function esStandalone() { return window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches; }
+let cuentaSel = null;
 function pintarCuentas() {
+  if (window.Guias) Guias.cerrar();
   vista('v-cuentas');
   const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   $('aviso-instalar').hidden = !(esIOS && !esStandalone());
   const lista = $('lista-cuentas');
   lista.innerHTML = '';
-  if (!Cuentas.lista.length) lista.innerHTML = '<p class="suave">Todavía no tienes cuentas.</p>';
+  $('c-guardados').hidden = !Cuentas.lista.length;
   for (const c of Cuentas.lista) {
     const el = document.createElement('div');
     el.className = 'item';
-    el.innerHTML = `<div class="txt"><div class="t1">${c.kind === 'cowork' ? '☁' : '🖥'} ${esc(c.name)}</div><div class="t2">${esc(c.url)}</div></div>
-      <div class="acc"><button class="mini" data-a="ren">Renombrar</button><button class="mini" data-a="del">Olvidar</button></div>`;
-    const txtC = el.querySelector('.txt'); txtC.setAttribute('role', 'button'); txtC.tabIndex = 0;
-    txtC.addEventListener('click', () => conectar(c));
-    txtC.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); conectar(c); } });
-    el.querySelector('[data-a=ren]').addEventListener('click', (e) => { e.stopPropagation(); pedirRenombrar(c); });
-    el.querySelector('[data-a=del]').addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (confirm(`¿Olvidar la cuenta «${c.name}»? Solo se borra de este teléfono.`)) { Cuentas.olvidar(c); pintarCuentas(); }
-    });
+    el.innerHTML = `<div class="txt"><div class="t1">${c.kind === 'cowork' ? '☁' : '🖥'} ${esc(c.name)}</div><div class="t2">${esc(c.url)}</div></div><button class="mini" data-a="mas" type="button" aria-label="Más acciones">⋯</button>`;
+    el.setAttribute('role', 'button'); el.tabIndex = 0;
+    el.addEventListener('click', () => conectar(c));
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); conectar(c); } });
+    el.querySelector('[data-a=mas]').addEventListener('click', (e) => { e.stopPropagation(); abrirAccionesCuenta(c); });
     lista.appendChild(el);
   }
   const hayHttp = location.protocol === 'https:' && Cuentas.lista.some((c) => c.url.startsWith('http://'));
   $('aviso-https').hidden = !hayHttp;
-  if (hayHttp) $('aviso-https').textContent = 'Hay cuentas con dirección http: desde una página https el navegador las bloquea. Funcionan las de la nube (https).';
+  if (hayHttp) $('aviso-https').textContent = 'Hay cuentas con dirección http: desde una página https el navegador las bloquea. Funcionan las de la nube y las https.';
+  if (window.Shell) Shell.pintarWake();
 }
+
+function abrirAccionesCuenta(c) { cuentaSel = c; $('ca-titulo').textContent = c.name; $('dlg-cuenta-acciones').showModal(); }
 
 function abrirDialogoCuenta(prefill) {
   const f = $('form-cuenta');
@@ -272,10 +294,10 @@ function abrirDialogoCuenta(prefill) {
 }
 function actualizarAyudaTipo() {
   const tipo = document.querySelector('input[name=c-tipo]:checked').value;
-  $('c-url').placeholder = tipo === 'cowork' ? 'https://…onrender.com' : '192.168.1.5';
+  $('c-url').placeholder = tipo === 'cowork' ? 'https://…onrender.com' : 'https://wichi.midominio.com';
   $('c-ayuda').textContent = tipo === 'cowork'
-    ? 'Servidor en la nube (https). El tipo solo indica cómo conectar; el nombre es el que escribiste.'
-    : 'Tu PC en la misma red. Ojo: desde una página https el navegador bloquea servidores http.';
+    ? 'Servidor en la nube (Render, https). El tipo solo indica cómo conectar; el nombre es el que escribiste.'
+    : 'Tu propio servidor (VPS) con HTTPS. Si es Wichinion con cuenta propia, escribe también el usuario.';
 }
 let cuentaRenombrando = null;
 function pedirRenombrar(c) { cuentaRenombrando = c; $('r-nombre').value = c.name; $('dlg-renombrar').showModal(); setTimeout(() => $('r-nombre').select(), 50); }
@@ -284,13 +306,15 @@ function pedirRenombrar(c) { cuentaRenombrando = c; $('r-nombre').value = c.name
 async function conectar(c) {
   const mia = ++S.conectando;
   detenerEventos();
-  S.cuenta = c; S.api = new Api(c.url, c.password);
+  S.cuenta = c; S.api = new Api(c.url, c.password, c.user);
   S.sesiones = []; S.actual = null; S.items = []; S.permisos = []; S.needsKey = undefined; S.nvidia = null;
   guardarLS(LS.actual, c.url);
+  S.offline = false; S.antes = []; S.cursorAntes = null; S.tokens = '';
   vista('v-inicio');
   $('nombre-cuenta').textContent = c.name;
   $('estado-conexion').textContent = 'Conectando… (si estaba dormido, tarda hasta 1 minuto)';
   $('lista-sesiones').innerHTML = '';
+  if (window.Shell) { Shell.pintarInicio(); Shell.pintarPanel(); }
   const r = await S.api.awake();
   if (mia !== S.conectando) return;
   if (!r.ok) { $('estado-conexion').textContent = ''; toast(r.error, 8000); pintarCuentas(); return; }
@@ -298,6 +322,7 @@ async function conectar(c) {
   try {
     await cargarSesiones();
     $('estado-conexion').textContent = 'conectado';
+    if (window.Shell) Shell.pintarWake();
     iniciarEventos();
     void comprobarClave().then(() => { if (window.Extra) Extra.alConectar(); });
   } catch (e) {
@@ -312,7 +337,7 @@ async function comprobarClave() {
     const r = await S.api.get('/api/integration/nvidia');
     const con = (r && r.data && r.data.connections) || [];
     S.needsKey = con.length === 0;
-    $('aviso-clave').hidden = !S.needsKey;
+    if (window.Shell) Shell.pintarClave();
   } catch { /* opcional */ }
 }
 
@@ -323,34 +348,42 @@ async function cargarSesiones() {
   pintarSesiones();
   if (window.Extra) await Extra.alCargarSesiones(todas);
 }
-function fechaCorta(ms) {
+function fechaLarga(ms) {
   if (!ms) return '';
-  const d = new Date(ms); const hoy = new Date();
-  const mismo = d.toDateString() === hoy.toDateString();
-  return mismo ? d.toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' }) : d.toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  return new Date(ms).toLocaleString('es', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 }
+/** Pulsación larga (o clic derecho): abre las acciones de una fila, como en el APK. */
+function pulsacionLarga(el, fn) {
+  let t = null, usado = false;
+  const parar = () => { clearTimeout(t); t = null; };
+  el.addEventListener('touchstart', () => { usado = false; t = setTimeout(() => { usado = true; fn(); }, 550); }, { passive: true });
+  el.addEventListener('touchmove', parar, { passive: true });
+  el.addEventListener('touchend', parar); el.addEventListener('touchcancel', parar);
+  el.addEventListener('contextmenu', (e) => { e.preventDefault(); fn(); });
+  el.addEventListener('click', (e) => { if (usado) { e.stopImmediatePropagation(); e.preventDefault(); usado = false; } }, true);
+}
+/** Pinta el Historial completo y, de paso, los «Recientes» del inicio y del panel lateral. */
 function pintarSesiones() {
   const lista = $('lista-sesiones');
   lista.innerHTML = '';
   const q = (($('buscar') && $('buscar').value) || '').trim().toLowerCase();
   const vistas = q ? S.sesiones.filter((s) => (s.title + ' ' + s.directory + ' ' + s.model).toLowerCase().includes(q)) : S.sesiones;
-  if (!vistas.length) lista.innerHTML = '<p class="suave">' + (q ? 'Nada coincide.' : 'Aún no hay conversaciones.') + '</p>';
+  if (!vistas.length) lista.innerHTML = '<p class="vacio">' + (q ? 'Ninguna sesión coincide.' : 'Aún no hay sesiones. Pulsa ＋ para crear una.') + '</p>';
   for (const s of vistas) {
-    const el = document.createElement('div');
-    el.className = 'item';
-    el.innerHTML = `<div class="txt"><div class="t1">${esc(s.title)}</div><div class="t2">${esc(fechaCorta(s.updated))} · ${esc(s.directory || '')}</div></div><button class="mini" data-a="mas" aria-label="Más acciones">⋯</button>`;
-    el.querySelector('[data-a=mas]').addEventListener('click', (e) => { e.stopPropagation(); if (window.Extra) Extra.accionesSesion(s); });
-    el.setAttribute('role', 'button'); el.tabIndex = 0;
-    el.addEventListener('click', () => abrirSesion(s));
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirSesion(s); } });
-    lista.appendChild(el);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'fila-sesion';
+    b.innerHTML = `<div class="t1">${esc(s.title)}</div><div class="t2">${esc(fechaLarga(s.updated))} · ${esc(s.directory || '')} · ${esc((s.model || '').split('/').pop())}</div>`;
+    pulsacionLarga(b, () => { if (window.Extra) Extra.accionesSesion(s); });
+    b.addEventListener('click', () => abrirSesion(s));
+    lista.appendChild(b);
   }
+  if (window.Shell) Shell.pintarRecientes();
 }
 
 /* ───────────── sesiones y chat ───────────── */
-async function nuevaSesion() {
+async function nuevaSesion(dir) {
   try {
-    const body = { location: { directory: '/workspace' } };
+    const body = { location: { directory: (dir || '').trim() || '/workspace' } };
     const r = await S.api.post('/api/session', body);
     const s = parseSesion(r.data);
     await abrirSesion(s);
@@ -359,11 +392,13 @@ async function nuevaSesion() {
 }
 
 async function abrirSesion(s) {
-  S.actual = s; S.items = []; S.busy = false; S.elegidoAMano = false;
+  S.actual = s; S.items = []; S.antes = []; S.cursorAntes = null; S.tokens = ''; S.pegado = true; S.busy = false; S.elegidoAMano = false;
   vista('v-chat');
   $('titulo-chat').textContent = s.title;
-  $('modelo-chat').textContent = s.model;
+  $('modelo-chat').textContent = (s.model || '').split('/').pop() || 'modelo por defecto';
   $('mensajes').innerHTML = '';
+  pintarTokens(); pintarOffline();
+  if (window.Shell) Shell.pintarClave();
   await refrescarChat();
   try {
     const act = await S.api.get('/api/session/active');
@@ -379,71 +414,148 @@ async function refrescarChat() {
   try {
     // Los más NUEVOS primero (en sesiones largas, si no, se verían los más antiguos).
     const r = await S.api.get(`/api/session/${s.id}/message?order=desc&limit=100`);
-    const lista = [...((r && r.data) || [])].reverse();
-    if (S.actual && S.actual.id === s.id) { S.items = parseMensajes(lista); pintarMensajes(true); }
+    const datos = (r && r.data) || [];
+    const lista = [...datos].reverse();
+    if (S.actual && S.actual.id === s.id) {
+      S.items = parseMensajes(lista); S.antes = [];
+      S.cursorAntes = datos.length >= 100 && r.cursor && r.cursor.next ? String(r.cursor.next) : null;
+      const ult = [...lista].reverse().find((m) => m.type === 'assistant' && m.tokens);
+      S.tokens = ult ? `tokens: ${Number(ult.tokens.input) || 0} entrada · ${Number(ult.tokens.output) || 0} salida` : '';
+      pintarMensajes(true); pintarTokens();
+    }
     const sess = (await S.api.get(`/api/session/${s.id}`)).data;
     if (sess && S.actual && S.actual.id === s.id) {
       S.actual = parseSesion(sess);
-      $('titulo-chat').textContent = S.actual.title; $('modelo-chat').textContent = S.actual.model;
+      $('titulo-chat').textContent = S.actual.title; $('modelo-chat').textContent = (S.actual.model || '').split('/').pop() || 'modelo por defecto';
     }
+    if (S.offline) { S.offline = false; pintarOffline(); }
   } catch (e) { nota('No se pudo leer la conversación: ' + e.message); }
+}
+
+/** «Cargar mensajes anteriores»: la página siguiente del cursor, que se añade por arriba. */
+async function cargarAnteriores() {
+  const s = S.actual; const c = S.cursorAntes;
+  if (!s || !c || S.cargandoAntes) return;
+  S.cargandoAntes = true; pintarMensajes(false);
+  try {
+    const r = await S.api.get(`/api/session/${s.id}/message?limit=100&cursor=${encodeURIComponent(c)}`);
+    const datos = (r && r.data) || [];
+    if (S.actual && S.actual.id === s.id) {
+      S.antes = [...parseMensajes([...datos].reverse()), ...(S.antes || [])];
+      S.cursorAntes = datos.length >= 100 && r.cursor && r.cursor.next ? String(r.cursor.next) : null;
+    }
+  } catch (e) { toast('No se pudieron cargar: ' + e.message, 5000); }
+  S.cargandoAntes = false;
+  const cont = $('mensajes'); const alto = cont.scrollHeight; S.pegado = false;
+  pintarMensajes(false); cont.scrollTop = cont.scrollHeight - alto;
 }
 
 function nota(t) { S.items.push({ kind: 'note', key: 'note:' + Date.now() + Math.random(), text: t }); pintarMensajes(true); }
 
-function nodoItem(it) {
+/* Filas visibles: un mensaje suelto, o un grupo plegado de razonamientos + herramientas seguidos (como en el APK). */
+function construirFilas(items) {
+  const out = []; let run = [];
+  const cierra = () => { if (run.length) { out.push({ tipo: 'trabajo', key: 'work:' + run[0].key, items: run }); run = []; } };
+  for (const it of items) { if (it.kind === 'reasoning' || it.kind === 'tool') run.push(it); else { cierra(); out.push({ tipo: 'uno', key: it.key, item: it }); } }
+  cierra();
+  return out;
+}
+const estadoTool = (s) => ({ completed: 'listo', success: 'listo', listo: 'listo', running: 'ejecutando…', pending: 'ejecutando…', ejecutando: 'ejecutando…', preparando: 'preparando…', error: 'falló', failed: 'falló', 'falló': 'falló' }[s] || s || '');
+
+function tituloTrabajo(items) {
+  const tools = items.filter((i) => i.kind === 'tool');
+  const fallaron = tools.filter((t) => estadoTool(t.status) === 'falló').length;
+  const corriendo = tools.some((t) => /^(ejecutando|preparando)/.test(estadoTool(t.status)));
+  let t = '';
+  if (tools.length) t += `🛠 ${tools.length} ${tools.length === 1 ? 'herramienta' : 'herramientas'}`;
+  if (items.some((i) => i.kind === 'reasoning')) t += (t ? ' · ' : '') + 'razonamiento';
+  if (fallaron) t += ` · ${fallaron} fallaron`;
+  if (corriendo) t += ' · ejecutando…';
+  return t;
+}
+
+function nodoFila(f) {
   let el;
-  if (it.kind === 'user') {
-    el = document.createElement('div'); el.className = 'msg user';
-    el.textContent = it.text;
-    if (it.files && it.files.length) { const f = document.createElement('div'); f.className = 'archivos'; f.textContent = '📎 ' + it.files.join(', '); el.appendChild(f); }
-  } else if (it.kind === 'text') {
-    el = document.createElement('div'); el.className = 'msg text'; el.innerHTML = markdown(it.text);
-  } else if (it.kind === 'note') {
-    el = document.createElement('div'); el.className = 'msg note'; el.textContent = it.text;
-  } else if (it.kind === 'reasoning') {
-    el = document.createElement('details'); el.className = 'detalle pensando';
-    el.innerHTML = `<summary>💭 Pensando…</summary><pre>${esc(it.text)}</pre>`;
+  if (f.tipo === 'trabajo') {
+    el = document.createElement('details'); el.className = 'trabajo';
+    const ult = [...f.items].reverse().find((i) => i.kind === 'tool');
+    const sum = document.createElement('summary'); sum.textContent = tituloTrabajo(f.items);
+    if (ult && ult.summary) { const u = document.createElement('span'); u.className = 'ultimo'; u.textContent = ult.name + ' · ' + ult.summary; sum.appendChild(u); }
+    el.appendChild(sum);
+    const dentro = document.createElement('div'); dentro.className = 'interior';
+    for (const i of f.items) {
+      if (i.kind === 'reasoning') { const r = document.createElement('div'); r.className = 'razon'; r.textContent = i.text; dentro.appendChild(r); }
+      else {
+        const d = document.createElement('details'); d.className = 'tool-card';
+        d.innerHTML = `<summary>🛠 ${esc(i.name)}${i.status ? ' · ' + esc(estadoTool(i.status)) : ''}<span class="resumen">${esc(i.summary || '')}</span></summary><pre>${esc(i.detail)}</pre>`;
+        dentro.appendChild(d);
+      }
+    }
+    el.appendChild(dentro);
   } else {
-    el = document.createElement('details'); el.className = 'detalle';
-    const ic = /fall/i.test(it.status) ? '✖' : /listo|success|complet/i.test(it.status) ? '✔' : '⚙';
-    el.innerHTML = `<summary>${ic} <b>${esc(it.name)}</b> <span class="estado-tool">${esc(it.summary || it.status)}</span></summary><pre>${esc(it.detail)}</pre>`;
+    const it = f.item;
+    if (it.kind === 'user') {
+      el = document.createElement('div'); el.className = 'msg user';
+      el.textContent = String(it.text).split('\n\n[Archivo ')[0];
+      if (it.files && it.files.length) { for (const n of it.files) { const a = document.createElement('div'); a.className = 'archivos'; a.textContent = '📎 ' + n; el.appendChild(a); } }
+    } else if (it.kind === 'text') {
+      // Las líneas «ACCION: …» son para la app, no para leerlas.
+      const mostrado = window.Acciones ? Acciones.separarAcciones(it.text).texto : it.text;
+      el = document.createElement('div'); el.className = 'msg text';
+      el.innerHTML = `<img class="marca-w" src="icons/wichi-w.png" alt="">${markdown(mostrado)}<button type="button" class="copiar-msg">⧉  Copiar</button>`;
+      el.querySelector('.copiar-msg').dataset.texto = mostrado;
+    } else {
+      el = document.createElement('div'); el.className = 'msg note'; el.textContent = it.text;
+    }
   }
-  el.dataset.key = it.key;
+  el.dataset.key = f.key;
   return el;
 }
 
 /** Repinta solo lo que cambió (así no se pierde el desplazamiento ni lo que está abierto). */
 function pintarMensajes(abajo) {
   const cont = $('mensajes');
-  const cercaDelFinal = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 140;
+  const cerca = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 90;
+  const filas = construirFilas([...(S.antes || []), ...S.items]);
   const porClave = new Map([...cont.children].map((c) => [c.dataset.key, c]));
+  let btnAntes = porClave.get('antes');
+  if (S.cursorAntes) {
+    if (!btnAntes) { btnAntes = document.createElement('button'); btnAntes.type = 'button'; btnAntes.className = 'cargar-antes'; btnAntes.dataset.key = 'antes'; btnAntes.addEventListener('click', () => void cargarAnteriores()); cont.prepend(btnAntes); }
+    btnAntes.textContent = S.cargandoAntes ? 'Cargando…' : 'Cargar mensajes anteriores';
+  } else if (btnAntes) { btnAntes.remove(); btnAntes = null; }
   const vistos = new Set();
-  let previo = null;
-  for (const it of S.items) {
-    vistos.add(it.key);
-    let el = porClave.get(it.key);
-    const firma = it.kind + '|' + (it.text || '') + '|' + (it.status || '') + '|' + (it.detail || '') + '|' + (it.summary || '');
+  let previo = btnAntes || null;
+  for (const f of filas) {
+    vistos.add(f.key);
+    let el = porClave.get(f.key);
+    const firma = JSON.stringify(f.tipo === 'trabajo' ? f.items.map((i) => [i.kind, i.text, i.status, i.detail, i.summary]) : [f.item.kind, f.item.text, (f.item.files || []).length]);
     if (!el || el.dataset.firma !== firma) {
-      const nuevo = nodoItem(it); nuevo.dataset.firma = firma;
+      const nuevo = nodoFila(f); nuevo.dataset.firma = firma;
       if (el) { if (el.open) nuevo.open = true; el.replaceWith(nuevo); } else if (previo) previo.after(nuevo); else cont.prepend(nuevo);
       el = nuevo;
     }
     previo = el;
   }
-  for (const [k, el] of porClave) if (!vistos.has(k) && k !== 'escribiendo') el.remove();
+  for (const [k, el] of porClave) if (!vistos.has(k) && k !== 'escribiendo' && k !== 'antes') el.remove();
   let esc2 = cont.querySelector('[data-key=escribiendo]');
-  if (S.busy) {
-    if (!esc2) { esc2 = document.createElement('div'); esc2.className = 'escribiendo'; esc2.dataset.key = 'escribiendo'; esc2.textContent = 'Wichi está trabajando…'; }
+  const ultima = filas[filas.length - 1];
+  if (S.busy && !(ultima && ultima.tipo === 'uno' && ultima.item.kind === 'text')) {
+    if (!esc2) { esc2 = document.createElement('div'); esc2.className = 'escribiendo'; esc2.dataset.key = 'escribiendo'; esc2.innerHTML = '<img src="icons/wichi-w.png" alt=""><span>Pensando…</span>'; }
     cont.appendChild(esc2);
   } else if (esc2) esc2.remove();
-  if (abajo || cercaDelFinal) cont.scrollTop = cont.scrollHeight;
+  if (abajo || S.pegado !== false || cerca) cont.scrollTop = cont.scrollHeight;
+  $('btn-final').hidden = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 90 || !filas.length;
 }
 
 function pintarBusy() {
   $('btn-parar').hidden = !S.busy;
+  $('barra-ocupado').hidden = !S.busy;
   pintarMensajes(false);
+  if (window.Shell) Shell.actualizarComposer();
 }
+
+function pintarTokens() { const t = S.tokens || ''; $('tokens-linea').hidden = !t; $('tokens-linea').textContent = t; }
+function pintarOffline() { for (const id of ['chat-offline', 'hi-offline']) { const e = $(id); if (e) e.hidden = !S.offline; } }
 
 function upsert(key, hacer) {
   const i = S.items.findIndex((x) => x.key === key);
@@ -467,6 +579,7 @@ function iniciarEventos() {
       } catch (e) {
         if (ac.signal.aborted) return;
         fallos++;
+        if (fallos >= 2 && !S.offline) { S.offline = true; pintarOffline(); }   // «Sin conexión con el servidor. Reintentando…»
       }
       if (ac.signal.aborted) return;
       await sleep(Math.min(1500 * (fallos + 1), 10000));
@@ -484,6 +597,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function manejarEvento(ev) {
+  if (S.offline) { S.offline = false; pintarOffline(); }
   const type = String(ev.type || ''); const data = ev.data || {}; const sid = String(data.sessionID || '');
   if (type.startsWith('permission.')) {
     const req = data.request || data;
@@ -498,7 +612,10 @@ function manejarEvento(ev) {
   switch (type) {
     case 'session.execution.started': S.busy = true; pintarBusy(); break;
     case 'session.execution.succeeded': case 'session.execution.failed': case 'session.execution.interrupted':
-      S.busy = false; pintarBusy(); setTimeout(() => void refrescarChat(), 300); void cargarSesiones().catch(() => {}); if (window.Extra) Extra.alTurno(sid); break;
+      S.busy = false; pintarBusy(); setTimeout(() => void refrescarChat(), 300); void cargarSesiones().catch(() => {}); if (window.Extra) Extra.alTurno(sid);
+      // Si el agente pidió acciones del teléfono en el chat escrito, se preguntan después de que se vea la respuesta.
+      if (window.Acciones && type === 'session.execution.succeeded') setTimeout(() => void Acciones.alTerminar(), 1200);
+      break;
     case 'session.text.started': upsert(kt, () => ({ kind: 'text', key: kt, text: '' })); break;
     case 'session.text.delta': upsert(kt, (o) => ({ kind: 'text', key: kt, text: ((o && o.text) || '') + String(data.delta || '') })); break;
     case 'session.reasoning.started': upsert(kr, () => ({ kind: 'reasoning', key: kr, text: '' })); break;
@@ -568,7 +685,7 @@ async function asegurarNvidia() {
   } catch { /* se intenta igual */ }
 }
 
-async function enviar(texto) {
+async function enviar(texto, op = {}) {
   texto = texto.trim();
   const hayAdj = !!(window.Extra && Extra.adjuntos.length);
   if ((!texto && !hayAdj) || !S.actual) return;
@@ -592,7 +709,8 @@ async function enviar(texto) {
       const adj = window.Extra ? await Extra.prepararAdjuntos(texto) : { text: texto, files: [], nombres: [] };
       S.items.push({ kind: 'user', key: 'local:' + Date.now(), text: texto || adj.text, files: adj.nombres }); pintarMensajes(true);
       await asegurarNvidia();
-      const cuerpo = { text: adj.text };
+      // El agente recibe (oculto en el chat) cómo pedir acciones del teléfono: en voz siempre, en el chat escrito la primera vez de cada conversación.
+      const cuerpo = { text: window.Acciones ? Acciones.conProtocolo(adj.text, S.actual.id, !!op.voz) : adj.text };
       if (adj.files.length) cuerpo.files = adj.files;
       await S.api.post(`/api/session/${S.actual.id}/prompt`, cuerpo);
     }
@@ -600,18 +718,31 @@ async function enviar(texto) {
 }
 
 /* ───────────── eventos de la interfaz ───────────── */
-function ajustarAltura() { const t = $('entrada'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px'; }
+function ajustarAltura(el) { const t = el || $('entrada'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 160) + 'px'; }
 
 function abrirClave() { $('form-clave').reset(); $('dlg-clave').showModal(); }
 
 function iniciarUI() {
-  $('btn-añadir').addEventListener('click', () => abrirDialogoCuenta());
+  // ── Conectar
+  $('form-conectar').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const url = $('cx-url').value.trim(); const clave = $('cx-clave').value.trim();
+    if (!url || !clave) { toast('Escribe la dirección y la contraseña del servidor.'); return; }
+    const tipo = /\.onrender\.com/i.test(url) ? 'cowork' : 'vps';
+    const c = Cuentas.añadir($('cx-nombre').value, tipo, url, clave, $('cx-user').value);
+    $('form-conectar').reset();
+    void conectar(c);
+  });
+  $('cx-ver').addEventListener('click', () => { const i = $('cx-clave'); const ver = i.type === 'password'; i.type = ver ? 'text' : 'password'; $('cx-ver').textContent = ver ? 'Ocultar' : 'Ver'; });
+  $('cx-qr').addEventListener('click', () => { if (window.Qr) Qr.escanear(); else toast('El escáner no está disponible.'); });
+  $('cx-guias').addEventListener('click', () => { if (window.Guias) { if (Sesion.leer()) Guias.hospedaje(); else Guias.cuenta(); } });
+  // ── Cuentas
   document.querySelectorAll('input[name=c-tipo]').forEach((r) => r.addEventListener('change', actualizarAyudaTipo));
   $('c-cancelar').addEventListener('click', () => $('dlg-cuenta').close());
   $('form-cuenta').addEventListener('submit', (e) => {
     e.preventDefault();
     const tipo = document.querySelector('input[name=c-tipo]:checked').value;
-    const c = Cuentas.añadir($('c-nombre').value, tipo, $('c-url').value, $('c-clave').value);
+    const c = Cuentas.añadir($('c-nombre').value, tipo, $('c-url').value, $('c-clave').value, $('c-user').value);
     $('dlg-cuenta').close();
     void conectar(c);
   });
@@ -619,14 +750,22 @@ function iniciarUI() {
   $('form-renombrar').addEventListener('submit', (e) => {
     e.preventDefault();
     if (cuentaRenombrando) { Cuentas.renombrar(cuentaRenombrando, $('r-nombre').value); if (S.cuenta === cuentaRenombrando) $('nombre-cuenta').textContent = cuentaRenombrando.name; }
-    $('dlg-renombrar').close(); pintarCuentas();
+    $('dlg-renombrar').close();
+    if (!$('v-cuentas').hidden) pintarCuentas();
+    if (!$('v-ajustes').hidden && window.Extra) Extra.pintarAjustes();
+    if (window.Shell) Shell.pintarPanel();
   });
-  $('btn-cuentas').addEventListener('click', () => { detenerEventos(); S.api = null; pintarCuentas(); });
-  $('btn-nueva').addEventListener('click', () => void nuevaSesion());
-  $('btn-atras').addEventListener('click', () => { if (window.Extra && S.actual) Extra.alCerrarChat(S.actual.id); S.actual = null; vista('v-inicio'); void cargarSesiones().catch(() => {}); });
+  $('ca-cerrar').addEventListener('click', () => $('dlg-cuenta-acciones').close());
+  $('ca-renombrar').addEventListener('click', () => { $('dlg-cuenta-acciones').close(); if (cuentaSel) pedirRenombrar(cuentaSel); });
+  $('ca-qr').addEventListener('click', () => { $('dlg-cuenta-acciones').close(); if (cuentaSel && window.Qr) Qr.mostrarCuenta(cuentaSel); });
+  $('ca-olvidar').addEventListener('click', () => {
+    $('dlg-cuenta-acciones').close();
+    if (cuentaSel && confirm(`¿Olvidar la cuenta «${cuentaSel.name}»? Solo se borra de este dispositivo.`)) { Cuentas.olvidar(cuentaSel); if (!$('v-ajustes').hidden && window.Extra) Extra.pintarAjustes(); else pintarCuentas(); }
+  });
+  // ── Chat
+  $('btn-atras').addEventListener('click', () => { if (window.Extra && S.actual) Extra.alCerrarChat(S.actual.id); S.actual = null; vista('v-inicio'); if (window.Shell) Shell.pintarInicio(); void cargarSesiones().catch(() => {}); });
   $('btn-parar').addEventListener('click', async () => { try { await S.api.post(`/api/session/${S.actual.id}/interrupt`); } catch (e) { toast('No se pudo detener: ' + e.message); } });
-  $('aviso-clave').addEventListener('click', () => abrirClave());
-  $('buscar').addEventListener('input', pintarSesiones);
+  $('btn-modelo').addEventListener('click', () => { if (window.Extra) void Extra.abrirModelos(); });
   $('k-cancelar').addEventListener('click', () => $('dlg-clave').close());
   $('form-clave').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -638,35 +777,64 @@ function iniciarUI() {
   $('form-envio').addEventListener('submit', (e) => {
     e.preventDefault();
     const t = $('entrada').value; $('entrada').value = ''; ajustarAltura();
+    S.pegado = true;
     void enviar(t);
+    if (window.Shell) Shell.actualizarComposer();
   });
-  $('entrada').addEventListener('input', ajustarAltura);
+  $('entrada').addEventListener('input', () => { ajustarAltura(); if (window.Shell) Shell.actualizarComposer(); });
   // «Enviar» en el teclado del iPhone (enterkeyhint=send) y Enter en un ordenador envían; Mayús+Enter hace salto de línea.
   $('entrada').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('form-envio').requestSubmit(); }
   });
   $('mensajes').addEventListener('click', (e) => {
-    const b = e.target.closest('.copiar'); if (!b) return;
-    const code = b.parentElement.querySelector('code').textContent;
-    (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(() => { b.textContent = 'Copiado'; setTimeout(() => { b.textContent = 'Copiar'; }, 1500); }).catch(() => toast('No se pudo copiar.'));
+    const b = e.target.closest('.copiar');
+    if (b) {
+      const code = b.parentElement.querySelector('code').textContent;
+      (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(() => { b.textContent = 'Copiado'; setTimeout(() => { b.textContent = 'Copiar'; }, 1500); }).catch(() => toast('No se pudo copiar.'));
+      return;
+    }
+    const m = e.target.closest('.copiar-msg');
+    if (m) (navigator.clipboard ? navigator.clipboard.writeText(m.dataset.texto || '') : Promise.reject()).then(() => { m.textContent = '✓  Copiado'; setTimeout(() => { m.textContent = '⧉  Copiar'; }, 1500); }).catch(() => toast('No se pudo copiar.'));
   });
+  $('mensajes').addEventListener('scroll', () => {
+    const c = $('mensajes'); const lejos = c.scrollHeight - c.scrollTop - c.clientHeight > 90;
+    S.pegado = !lejos; $('btn-final').hidden = !lejos;
+  }, { passive: true });
+  $('btn-final').addEventListener('click', () => { S.pegado = true; $('mensajes').scrollTop = $('mensajes').scrollHeight; $('btn-final').hidden = true; });
 }
 
 /* ───────────── arranque ───────────── */
-function arrancar() {
-  Cuentas.cargar();
-  iniciarUI();
-  // Enlace de conexión: …/#conectar?u=<url>&p=<contraseña>&n=<nombre>&k=<cowork|local> (el que genera el QR de la app)
+/** Pantallas a las que vuelven las guías de bienvenida. */
+window.abrirInicio = () => { if (S.api) { vista('v-inicio'); if (window.Shell) Shell.pintarInicio(); } else pintarCuentas(); };
+window.abrirConectar = () => pintarCuentas();
+window.alOmitirClave = () => { if (S.api) window.abrirInicio(); };
+
+function entrar() {
+  // Enlace de conexión: …/#conectar?u=<url>&p=<contraseña>&n=<nombre>&k=<cowork|vps>&w=<usuario> (el que genera el QR de la app)
   const h = location.hash;
   if (h.startsWith('#conectar?')) {
     const q = new URLSearchParams(h.slice('#conectar?'.length));
     const u = q.get('u'); const p = q.get('p');
     history.replaceState(null, '', location.pathname + location.search); // la contraseña no se queda en la barra ni en el historial
-    if (u && p) { const c = Cuentas.añadir(q.get('n') || '', q.get('k') === 'local' ? 'local' : 'cowork', u, p); void conectar(c); return; }
+    if (u && p) { const k = q.get('k'); const c = Cuentas.añadir(q.get('n') || '', k === 'local' ? 'local' : k === 'vps' ? 'vps' : 'cowork', u, p, q.get('w') || ''); void conectar(c); return; }
   }
   const ultima = leerLS(LS.actual);
   const c = Cuentas.lista.find((x) => x.url === ultima) || (Cuentas.lista.length === 1 ? Cuentas.lista[0] : null);
-  if (c) void conectar(c); else pintarCuentas();
+  if (c) { void conectar(c); return; }
+  // Primera vez: crear la cuenta de Wichi y elegir dónde hospedar el servidor (como el APK).
+  if (!Cuentas.lista.length && window.Guias) { if (Sesion.leer()) Guias.hospedaje(); else Guias.cuenta(); return; }
+  pintarCuentas();
+}
+
+function arrancar() {
+  Cuentas.cargar();
+  iniciarUI();
+  if (window.Shell) Shell.iniciar();
+  // Si volvemos de iniciar sesión en Spotify, se termina primero (la URL trae ?code=…).
+  const sp = window.Spotify ? Promise.resolve(Spotify.alCargar()).catch(() => false) : Promise.resolve(false);
+  void sp.then(entrar);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* sin instalación sin conexión */ });
 }
-arrancar();
+// Los demás scripts (funciones, acciones, voz, shell…) se cargan después de este: se arranca cuando ya están todos.
+// (con scripts «defer» el documento ya está «interactive» al ejecutarse este; DOMContentLoaded llega cuando todos terminaron)
+if (document.readyState === 'complete') arrancar(); else document.addEventListener('DOMContentLoaded', arrancar);

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wichi</title>
 <meta name="description" content="Wichi: tu asistente de IA, en el iPhone.">
-<meta name="theme-color" content="#10151c">
-<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0D0E10">
+<meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,185 +14,345 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="tema.css">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <div id="app" class="app">
 
-  <!-- Conexión: cuentas guardadas y añadir una -->
+  <!-- ═════════ Conectar: servidores guardados y conexión manual (ConnectScreen del APK) ═════════ -->
   <section id="v-cuentas" class="vista" hidden>
-    <header class="barra">
-      <img src="icons/icon-192.png" alt="" class="logo">
-      <h1>Wichi</h1>
-    </header>
-    <main class="cuerpo">
-      <p class="suave">Elige una cuenta o añade una. Cada cuenta lleva el nombre que tú le pongas; «En la nube» o «Mi PC» solo indica cómo se conecta.</p>
+    <main class="cuerpo conectar">
+      <h1 class="t-titulo">Wichi</h1>
+      <p class="t-suave">Conecta con tu servidor Wichinion (en Render o en tu VPS). La clave de NVIDIA se queda en el servidor.</p>
       <div id="aviso-instalar" class="tarjeta" hidden>
-        <strong>Instálala en tu iPhone</strong>
-        <p class="suave">En Safari toca <span class="chip">Compartir ⬆︎</span> y luego <span class="chip">Añadir a pantalla de inicio</span>. Se abrirá como una app, sin barra del navegador.</p>
+        <h3>Instálala en tu iPhone</h3>
+        <p class="t-suave t-pequeno">En Safari toca <span class="chip">Compartir ⬆︎</span> y luego <span class="chip">Añadir a pantalla de inicio</span>. Se abrirá como una app, sin barra del navegador.</p>
       </div>
-      <div id="lista-cuentas" class="lista"></div>
-      <button id="btn-añadir" class="btn principal ancho">＋ Añadir cuenta</button>
+      <div id="c-wake" class="tarjeta fila-interruptor" hidden>
+        <div class="interruptor-texto"><span>Servidor Cowork</span><small id="c-wake-estado" class="t-suave"></small></div>
+        <label class="interruptor"><input type="checkbox" id="c-wake-sw"><span></span></label>
+      </div>
+      <div id="c-guardados" hidden>
+        <div class="t-seccion">Servidores guardados</div>
+        <div id="lista-cuentas" class="lista"></div>
+        <p class="t-suave t-pequeno">Toca para conectar · «⋯» para renombrar, compartir QR u olvidar</p>
+      </div>
       <p id="aviso-https" class="aviso" hidden></p>
+      <form id="form-conectar" class="formulario" autocomplete="off">
+        <label class="campo">Nombre (opcional)<input id="cx-nombre" placeholder="Mi VPS" autocomplete="off"></label>
+        <label class="campo">Dirección del servidor<input id="cx-url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://wichi.midominio.com"></label>
+        <label class="campo">Contraseña del servidor
+          <span class="con-boton"><input id="cx-clave" type="password" autocomplete="off" autocapitalize="off"><button type="button" id="cx-ver">Ver</button></span>
+        </label>
+        <details class="avanzado"><summary>Usuario (solo Wichinion con cuenta propia)</summary>
+          <label class="campo">Usuario<input id="cx-user" placeholder="opencode" autocomplete="off" autocapitalize="off"></label>
+        </details>
+        <button id="cx-conectar" class="btn principal ancho" type="submit">Conectar</button>
+        <button id="cx-qr" class="btn tonal ancho" type="button">Escanear QR de conexión</button>
+        <button id="cx-guias" class="btn texto ancho" type="button">Crear mi propio servidor (Render o VPS)</button>
+      </form>
     </main>
   </section>
 
-  <!-- Conversaciones -->
-  <section id="v-inicio" class="vista" hidden>
-    <header class="barra">
-      <button id="btn-cuentas" class="icono" aria-label="Cuentas">☰</button>
-      <div class="titulo"><span id="nombre-cuenta">Wichi</span><small id="estado-conexion"></small></div>
-      <button id="btn-consumo" class="icono" aria-label="Consumo de tokens" title="Consumo de tokens"><img src="icons/consumo.png" alt="" class="ico-img"></button>
-      <button id="btn-ajustes" class="icono" aria-label="Ajustes" title="Ajustes">⚙</button>
+  <!-- ═════════ Inicio: «¿En qué trabajamos hoy?» (HomeScreen del APK) ═════════ -->
+  <section id="v-inicio" class="vista hero" hidden>
+    <header class="barra-inicio">
+      <button id="btn-cuentas" class="icono" aria-label="Menú">☰</button>
+      <span class="espaciador"></span>
+      <span class="nombre-servidor"><span id="nombre-cuenta">Wichi</span><small id="estado-conexion"></small></span>
     </header>
-    <main class="cuerpo">
-      <button id="btn-nueva" class="btn principal ancho">✎ Nueva conversación</button>
+    <main class="cuerpo inicio">
       <div id="aviso-restaurado" class="aviso" hidden></div>
-      <div id="aviso-clave" class="aviso" hidden>Este servidor aún no tiene tu clave de NVIDIA. Toca 🔑 para guardarla.</div>
-      <input id="buscar" type="search" class="buscar" placeholder="Buscar conversaciones" autocomplete="off">
-      <h2 class="seccion">Conversaciones</h2>
-      <div id="lista-sesiones" class="lista"></div>
+      <div class="inicio-centro">
+        <h1 class="t-grande">¿En qué trabajamos hoy?</h1>
+        <div class="composer" id="h-composer">
+          <div id="h-adjuntos" class="adjuntos" hidden></div>
+          <textarea id="h-entrada" rows="1" placeholder="Pregúntale a Wichi" enterkeyhint="send" autocomplete="off"></textarea>
+          <div class="composer-fila">
+            <button id="h-mas" class="icono-redondo" type="button" aria-label="Adjuntar archivo o imagen"><img src="icons/clip.svg" alt=""></button>
+            <span class="menu-ancla"><button id="h-chip" class="chip-cuenta" type="button">☁ Cloud ▾</button>
+              <div id="h-menu-cuentas" class="menu-flotante" hidden></div></span>
+            <span class="espaciador"></span>
+            <button id="h-voz" class="pildora" type="button">Hablar</button>
+            <button id="h-dictar" class="icono-redondo" type="button" aria-label="Dictar"><img src="icons/mic.svg" alt=""></button>
+            <button id="h-enviar" class="enviar" type="button" aria-label="Enviar" hidden><img src="icons/btn-enviar.png" alt=""></button>
+          </div>
+        </div>
+        <div class="chips-fila" id="h-sugerencias">
+          <button class="chip" type="button">Resume un archivo</button>
+          <button class="chip" type="button">Depura un error</button>
+          <button class="chip" type="button">Compara dos opciones</button>
+          <button class="chip" type="button">Explícame este código</button>
+        </div>
+        <div id="aviso-clave" class="aviso" hidden>Este servidor aún no tiene tu clave de NVIDIA. <button type="button" id="aviso-clave-btn" class="enlace">Guardarla ahora</button></div>
+        <div id="h-recientes-wrap" hidden>
+          <div class="t-seccion">Recientes</div>
+          <div id="h-recientes" class="recientes"></div>
+          <button id="h-historial" class="enlace-grande" type="button">Ver todo el historial →</button>
+        </div>
+      </div>
     </main>
   </section>
 
-  <!-- Chat -->
+  <!-- ═════════ Historial completo (SessionsScreen del APK) ═════════ -->
+  <section id="v-historial" class="vista" hidden>
+    <header class="barra">
+      <button id="hi-atras" class="icono" aria-label="Volver">←</button>
+      <div class="titulo"><span>Historial</span></div>
+      <button id="hi-actualizar" class="btn texto">Actualizar</button>
+      <span class="menu-ancla"><button id="hi-mas" class="icono" aria-label="Más">⋮</button>
+        <div id="hi-menu" class="menu-flotante der" hidden>
+          <button type="button" id="hi-ajustes">Ajustes y avisos</button>
+          <button type="button" id="hi-servidor">Cambiar de servidor</button>
+        </div></span>
+    </header>
+    <div id="hi-offline" class="banner-error" hidden>Sin conexión con el servidor. Reintentando…</div>
+    <div id="hi-cargando" class="barra-ocupado" hidden></div>
+    <input id="buscar" type="search" class="buscar" placeholder="Buscar sesión" autocomplete="off">
+    <main class="cuerpo lista-historial">
+      <div id="lista-sesiones"></div>
+    </main>
+    <button id="btn-nueva" class="fab" aria-label="Nueva sesión">＋</button>
+  </section>
+
+  <!-- ═════════ Chat (ChatScreen del APK) ═════════ -->
   <section id="v-chat" class="vista" hidden>
     <header class="barra">
-      <button id="btn-atras" class="icono" aria-label="Volver">‹</button>
+      <button id="btn-atras" class="icono" aria-label="Volver">←</button>
       <div class="titulo"><span id="titulo-chat">Conversación</span><button id="modelo-chat" class="modelo-btn" type="button" aria-label="Cambiar de modelo"></button></div>
-      <button id="btn-entregas" class="icono" aria-label="Archivos del agente" title="Archivos del agente">📁</button>
-      <button id="btn-parar" class="icono" aria-label="Detener" hidden>■</button>
+      <button id="btn-modelo" class="btn texto">Modelo</button>
     </header>
+    <div id="chat-offline" class="banner-error" hidden>Sin conexión con el servidor. Reintentando…</div>
+    <div id="barra-ocupado" class="barra-ocupado" hidden></div>
     <div id="permisos"></div>
-    <main id="mensajes" class="mensajes" aria-live="polite"></main>
-    <div id="menu-comandos" class="menu-comandos" hidden></div>
-    <div id="adjuntos" class="adjuntos" hidden></div>
-    <form id="form-envio" class="envio">
-      <button id="btn-adjuntar" class="icono" type="button" aria-label="Adjuntar archivo">📎</button>
-      <input id="in-archivos" type="file" multiple hidden>
-      <textarea id="entrada" rows="1" placeholder="Pregúntale a Wichi" enterkeyhint="send" autocomplete="off"></textarea>
-      <button id="btn-enviar" class="btn principal" type="submit" aria-label="Enviar">➤</button>
-    </form>
+    <div class="mensajes-caja">
+      <main id="mensajes" class="mensajes" aria-live="polite"></main>
+      <button id="btn-final" class="al-final" type="button" hidden>↓ Al final</button>
+    </div>
+    <footer class="pie-chat">
+      <div id="aviso-clave-chat" class="tarjeta-clave" hidden>
+        <b>Antes de empezar necesito tu clave de NVIDIA</b>
+        <span>Pégala aquí abajo en un mensaje (empieza por nvapi-). No la usará nadie más: se guarda solo en este servidor y no se envía al modelo.</span>
+        <a href="https://build.nvidia.com/settings/api-keys" target="_blank" rel="noopener">Conseguir mi clave gratis →</a>
+      </div>
+      <div id="clave-guardada" class="tarjeta-ok" hidden>✓ Clave guardada solo en este servidor. Ya puedo responder.</div>
+      <button id="btn-entregas" class="entregas-barra" type="button" hidden>📁 Archivos del agente</button>
+      <div id="tokens-linea" class="tokens-linea" hidden></div>
+      <div id="menu-comandos" class="menu-comandos" hidden></div>
+      <form id="form-envio" class="composer">
+        <div id="adjuntos" class="adjuntos" hidden></div>
+        <textarea id="entrada" rows="1" placeholder="Escribe o usa el ＋" enterkeyhint="send" autocomplete="off"></textarea>
+        <input id="in-archivos" type="file" multiple hidden>
+        <div class="composer-fila">
+          <span class="menu-ancla"><button id="btn-adjuntar" class="icono-redondo" type="button" aria-label="Más: adjuntar y comandos"><img src="icons/clip.svg" alt=""></button>
+            <div id="menu-mas" class="menu-flotante arriba" hidden></div></span>
+          <span class="espaciador"></span>
+          <button id="btn-voz" class="pildora" type="button">Hablar</button>
+          <button id="btn-dictar" class="icono-redondo" type="button" aria-label="Dictar"><img src="icons/mic.svg" alt=""></button>
+          <button id="btn-enviar" class="enviar" type="submit" aria-label="Enviar" hidden><img src="icons/btn-enviar.png" alt=""></button>
+          <button id="btn-parar" class="detener" type="button" aria-label="Detener" hidden>■</button>
+        </div>
+      </form>
+    </footer>
   </section>
 
-  <!-- Ajustes -->
+  <!-- ═════════ Ajustes ═════════ -->
   <section id="v-ajustes" class="vista" hidden>
     <header class="barra">
-      <button id="aj-atras" class="icono" aria-label="Volver">‹</button>
+      <button id="aj-atras" class="icono" aria-label="Volver">←</button>
       <div class="titulo"><span>Ajustes</span></div>
     </header>
-    <main class="cuerpo" id="aj-cuerpo"></main>
+    <main class="cuerpo tarjetas" id="aj-cuerpo"></main>
   </section>
 
-  <!-- Consumo de tokens -->
+  <!-- ═════════ Consumo de tokens ═════════ -->
   <section id="v-consumo" class="vista" hidden>
     <header class="barra">
-      <button id="co-atras" class="icono" aria-label="Volver">‹</button>
+      <button id="co-atras" class="icono" aria-label="Volver">←</button>
       <div class="titulo"><span>Consumo de tokens</span><small id="co-sub"></small></div>
       <button id="co-refrescar" class="icono" aria-label="Actualizar">↻</button>
     </header>
     <main class="cuerpo" id="co-cuerpo"></main>
   </section>
 
+  <!-- ═════════ Panel lateral (PanelLateral del APK) ═════════ -->
+  <div id="panel-fondo" class="panel-fondo" hidden></div>
+  <aside id="panel" class="panel" aria-label="Menú" aria-hidden="true">
+    <div class="panel-cab">
+      <img src="icons/logo-wichi.png" alt="" class="logo-redondo">
+      <span class="panel-titulo">Wichi</span>
+      <button id="p-buscar-btn" class="icono" aria-label="Buscar conversaciones">🔍</button>
+    </div>
+    <input id="p-buscar" class="campo-pildora" type="search" placeholder="Buscar conversaciones" autocomplete="off" hidden>
+    <nav class="panel-filas">
+      <button class="fila" id="p-nueva" type="button"><span class="fila-ico">✎</span>Nueva conversación</button>
+      <button class="fila" id="p-historial" type="button"><img src="icons/icono-historial.png" alt="">Historial completo</button>
+      <button class="fila" id="p-consumo" type="button"><img src="icons/icono-consumo.png" alt="">Consumo de tokens</button>
+    </nav>
+    <div id="p-espacios-caja" hidden>
+      <div class="etiqueta">Espacios</div>
+      <nav id="p-espacios" class="panel-filas"></nav>
+    </div>
+    <div class="etiqueta">Recientes</div>
+    <div id="p-recientes" class="panel-recientes"></div>
+    <div class="panel-pie">
+      <div id="p-wake" class="fila-interruptor" hidden>
+        <div class="interruptor-texto"><span>Servidor Cowork</span><small id="p-wake-estado"></small></div>
+        <label class="interruptor"><input type="checkbox" id="p-wake-sw"><span></span></label>
+      </div>
+      <div class="pie-servidor">
+        <span id="p-avatar" class="avatar">W</span>
+        <span class="pie-texto"><span id="p-servidor">Servidor</span><small id="p-tipo"></small></span>
+        <button id="p-ajustes" class="icono" aria-label="Ajustes">⚙</button>
+      </div>
+    </div>
+  </aside>
+
   <div id="toast" class="toast" hidden></div>
 </div>
 
-<!-- Diálogo: añadir cuenta -->
+<!-- ═════════ Diálogos ═════════ -->
 <dialog id="dlg-cuenta">
   <form method="dialog" id="form-cuenta">
     <h3 id="dlg-cuenta-titulo">Añadir cuenta</h3>
-    <label>Nombre de la cuenta<input id="c-nombre" placeholder="El que tú quieras" autocomplete="off" required></label>
+    <label class="campo">Nombre de la cuenta<input id="c-nombre" placeholder="El que tú quieras" autocomplete="off" required></label>
     <div class="fila-chips" role="radiogroup" aria-label="Tipo">
-      <label class="chipradio"><input type="radio" name="c-tipo" value="cowork" checked><span>☁ En la nube</span></label>
-      <label class="chipradio"><input type="radio" name="c-tipo" value="local"><span>🖥 Mi PC</span></label>
+      <label class="chipradio"><input type="radio" name="c-tipo" value="cowork" checked><span>☁ Cloud</span></label>
+      <label class="chipradio"><input type="radio" name="c-tipo" value="vps"><span>🖥 Mi VPS</span></label>
     </div>
-    <label>Dirección<input id="c-url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…onrender.com" required></label>
-    <label>Contraseña<input id="c-clave" type="password" autocomplete="off" autocapitalize="off" required></label>
-    <p class="suave pequeno" id="c-ayuda"></p>
+    <label class="campo">Dirección<input id="c-url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…onrender.com" required></label>
+    <label class="campo">Contraseña<input id="c-clave" type="password" autocomplete="off" autocapitalize="off" required></label>
+    <label class="campo">Usuario (opcional)<input id="c-user" placeholder="opencode" autocomplete="off" autocapitalize="off"></label>
+    <p class="t-suave t-pequeno" id="c-ayuda"></p>
     <menu>
-      <button type="button" class="btn" id="c-cancelar">Cancelar</button>
+      <button type="button" class="btn texto" id="c-cancelar">Cancelar</button>
       <button type="submit" class="btn principal">Añadir y conectar</button>
     </menu>
   </form>
 </dialog>
 
-<!-- Diálogo: renombrar -->
 <dialog id="dlg-renombrar">
   <form method="dialog" id="form-renombrar">
     <h3>Renombrar cuenta</h3>
-    <label>Nombre<input id="r-nombre" autocomplete="off" required></label>
+    <label class="campo">Nombre<input id="r-nombre" autocomplete="off" required></label>
     <menu>
-      <button type="button" class="btn" id="r-cancelar">Cancelar</button>
+      <button type="button" class="btn texto" id="r-cancelar">Cancelar</button>
       <button type="submit" class="btn principal">Guardar</button>
     </menu>
   </form>
 </dialog>
 
-<!-- Diálogo: clave de NVIDIA -->
+<dialog id="dlg-cuenta-acciones">
+  <h3 id="ca-titulo">Cuenta</h3>
+  <div class="lista">
+    <button class="btn tonal ancho" id="ca-renombrar" type="button">Renombrar</button>
+    <button class="btn tonal ancho" id="ca-qr" type="button">Compartir por QR</button>
+    <button class="btn peligro ancho" id="ca-olvidar" type="button">Olvidar</button>
+  </div>
+  <menu><button type="button" class="btn texto" id="ca-cerrar">Cerrar</button></menu>
+</dialog>
+
 <dialog id="dlg-clave">
   <form method="dialog" id="form-clave">
-    <h3>Clave de NVIDIA</h3>
-    <p class="suave pequeno">Se guarda en el servidor al que estás conectado, no en este teléfono. Es gratis: build.nvidia.com → «Generate API Key». Empieza por nvapi-</p>
-    <label>Clave<input id="k-clave" type="password" autocomplete="off" autocapitalize="off" placeholder="nvapi-…" required></label>
+    <h3>Mi clave de NVIDIA</h3>
+    <p class="t-suave t-pequeno">Se guarda en el servidor al que estás conectado, no en este teléfono. Es gratis: build.nvidia.com → «Generate API Key». Empieza por nvapi-</p>
+    <label class="campo">Clave<input id="k-clave" type="password" autocomplete="off" autocapitalize="off" placeholder="nvapi-…" required></label>
     <menu>
-      <button type="button" class="btn" id="k-cancelar">Cancelar</button>
+      <button type="button" class="btn texto" id="k-cancelar">Cancelar</button>
       <button type="submit" class="btn principal">Guardar en el servidor</button>
     </menu>
   </form>
 </dialog>
 
-<!-- Diálogo: modelo -->
 <dialog id="dlg-modelo">
   <h3>Modelo</h3>
-  <p class="suave pequeno">Solo se muestran los de proveedores activos en el servidor.</p>
+  <p class="t-suave t-pequeno">Solo se muestran los de proveedores activos en el servidor.</p>
   <div id="lista-modelos" class="lista"></div>
-  <menu><button type="button" class="btn" id="m-cerrar">Cerrar</button></menu>
+  <menu><button type="button" class="btn texto" id="m-cerrar">Cerrar</button></menu>
 </dialog>
 
-<!-- Diálogo: acciones de una conversación -->
-<dialog id="dlg-sesion">
-  <h3 id="ds-titulo">Conversación</h3>
-  <div class="lista">
-    <button class="btn ancho" id="ds-renombrar">Renombrar</button>
-    <button class="btn ancho" id="ds-archivar">Archivar (ocultar de la lista)</button>
-    <button class="btn ancho peligro" id="ds-borrar">Eliminar</button>
-  </div>
-  <menu><button type="button" class="btn" id="ds-cerrar">Cerrar</button></menu>
-</dialog>
-<dialog id="dlg-ren-sesion">
-  <form method="dialog" id="form-ren-sesion">
-    <h3>Renombrar conversación</h3>
-    <label>Título<input id="rs-titulo" autocomplete="off" required></label>
-    <menu><button type="button" class="btn" id="rs-cancelar">Cancelar</button><button type="submit" class="btn principal">Guardar</button></menu>
+<dialog id="dlg-nueva">
+  <form method="dialog" id="form-nueva">
+    <h3>Nueva sesión</h3>
+    <div class="t-seccion">Cuenta:</div>
+    <div id="nv-cuentas" class="fila-chips vertical"></div>
+    <label class="campo">Carpeta de trabajo dentro del servidor (por ejemplo /workspace):<input id="nv-dir" value="/workspace" autocapitalize="off" autocorrect="off"></label>
+    <menu>
+      <button type="button" class="btn texto" id="nv-cancelar">Cancelar</button>
+      <button type="submit" class="btn principal">Crear</button>
+    </menu>
   </form>
 </dialog>
 
-<!-- Diálogo: archivos del agente (carpeta «entregas») -->
+<dialog id="dlg-sesion">
+  <h3 id="ds-titulo">Conversación</h3>
+  <div class="lista">
+    <button class="btn tonal ancho" id="ds-renombrar" type="button">Renombrar</button>
+    <button class="btn tonal ancho" id="ds-archivar" type="button">Archivar (ocultar de la lista)</button>
+    <button class="btn peligro ancho" id="ds-borrar" type="button">Borrar</button>
+  </div>
+  <menu><button type="button" class="btn texto" id="ds-cerrar">Cerrar</button></menu>
+</dialog>
+<dialog id="dlg-ren-sesion">
+  <form method="dialog" id="form-ren-sesion">
+    <h3>Renombrar sesión</h3>
+    <label class="campo">Título<input id="rs-titulo" autocomplete="off" required></label>
+    <menu><button type="button" class="btn texto" id="rs-cancelar">Cancelar</button><button type="submit" class="btn principal">Guardar</button></menu>
+  </form>
+</dialog>
+
 <dialog id="dlg-entregas">
   <h3>Archivos del agente</h3>
-  <p class="suave pequeno">Lo que Wichi dejó en la carpeta «entregas» de esta conversación.</p>
+  <p class="t-suave t-pequeno">Lo que Wichi dejó en la carpeta «entregas» de esta conversación.</p>
   <div id="lista-entregas" class="lista"></div>
-  <menu><button type="button" class="btn" id="e-actualizar">Actualizar</button><button type="button" class="btn principal" id="e-cerrar">Cerrar</button></menu>
+  <menu><button type="button" class="btn texto" id="e-actualizar">Actualizar</button><button type="button" class="btn principal" id="e-cerrar">Cerrar</button></menu>
 </dialog>
 <dialog id="dlg-imagen">
   <h3 id="im-titulo">Imagen</h3>
   <img id="im-img" alt="" class="vista-img">
-  <menu><button type="button" class="btn" id="im-cerrar">Cerrar</button><button type="button" class="btn principal" id="im-guardar">Guardar / compartir</button></menu>
+  <menu><button type="button" class="btn texto" id="im-cerrar">Cerrar</button><button type="button" class="btn principal" id="im-guardar">Guardar / compartir</button></menu>
 </dialog>
 
-<!-- Diálogo: añadir conector -->
 <dialog id="dlg-conector">
   <form method="dialog" id="form-conector">
     <h3>Añadir conector</h3>
-    <p class="suave pequeno">Conecta una app con API (servidor MCP): el agente podrá usarla como herramienta. Se guarda en el servidor.</p>
-    <label>Nombre<input id="cn-nombre" autocomplete="off" autocapitalize="off" placeholder="mi-app" required></label>
-    <label>Dirección<input id="cn-url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…/mcp" required></label>
-    <label>Llave (opcional)<input id="cn-llave" type="password" autocomplete="off" autocapitalize="off"></label>
-    <menu><button type="button" class="btn" id="cn-cancelar">Cancelar</button><button type="submit" class="btn principal">Añadir</button></menu>
+    <p class="t-suave t-pequeno">Conecta una app con API (servidor MCP): el agente podrá usarla como herramienta. Se guarda en el servidor.</p>
+    <label class="campo">Nombre<input id="cn-nombre" autocomplete="off" autocapitalize="off" placeholder="mi-app" required></label>
+    <label class="campo">Dirección<input id="cn-url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…/mcp" required></label>
+    <label class="campo">Llave (opcional)<input id="cn-llave" type="password" autocomplete="off" autocapitalize="off"></label>
+    <menu><button type="button" class="btn texto" id="cn-cancelar">Cancelar</button><button type="submit" class="btn principal">Añadir</button></menu>
   </form>
 </dialog>
 
+<!-- Pregunta «Sí / No» de una acción del teléfono (el «Sí» la ejecuta en el mismo toque, como exige iOS) -->
+<dialog id="dlg-accion">
+  <p id="acc-texto" class="acc-texto"></p>
+  <menu><button type="button" class="btn texto" id="acc-no">No</button><button type="button" class="btn principal" id="acc-si">Sí</button></menu>
+</dialog>
+
+<!-- Modo de voz -->
+<div id="voz" class="voz hero" hidden role="dialog" aria-label="Hablar con Wichi">
+  <button id="voz-cerrar" class="icono voz-x" type="button" aria-label="Cerrar">✕</button>
+  <div class="voz-centro">
+    <div id="voz-orbe" class="voz-orbe" data-estado="inactivo"></div>
+    <div id="voz-estado" class="voz-estado"></div>
+    <div id="voz-dicho" class="voz-dicho"></div>
+    <div id="voz-resp" class="voz-resp"></div>
+  </div>
+  <div id="voz-pregunta" class="voz-pregunta" hidden>
+    <p id="voz-pregunta-texto"></p>
+    <div class="acciones"><button id="voz-no" class="btn tonal" type="button">No</button><button id="voz-si" class="btn principal" type="button">Sí</button></div>
+  </div>
+</div>
+
 <script src="app.js" defer></script>
 <script src="funciones.js" defer></script>
+<script src="acciones.js" defer></script>
+<script src="voz.js" defer></script>
+<script src="shell.js" defer></script>
+<script src="guias.js" defer></script>
+<script src="qr.js" defer></script>
+<script src="spotify.js" defer></script>
 </body>
 </html>
