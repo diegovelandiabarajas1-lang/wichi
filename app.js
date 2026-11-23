@@ -1,6 +1,6 @@
 'use strict';
 /* Wichi PWA: cliente web de Wichi para iPhone (y cualquier navegador moderno).
-   Habla con un servidor OpenCode/Wichinion por su API HTTP (usuario «opencode» + contraseña).
+   Habla con un servidor Wichinion por su API HTTP (usuario «opencode» + contraseña).
    Sin dependencias ni compilación. Los datos (cuentas) viven solo en este dispositivo (localStorage). */
 
 const $ = (id) => document.getElementById(id);
@@ -59,7 +59,7 @@ const Cuentas = {
     if (tipo === 'local' && !/:\d+(\/|$)/.test(u.replace(/^https?:\/\//i, ''))) u += ':4096';
     return u.replace(/\/+$/, '');
   },
-  /** tipo: «cowork» (☁ en la nube: Render), «vps» (🖥 Mi VPS) o «local» (antiguo «Mi PC», se trata como VPS). user: el usuario de Wichinion (el nombre de tu cuenta; «opencode» en los servidores de siempre). */
+  /** tipo: «cowork» (☁ en la nube: Render), «vps» (🖥 Mi VPS) o «local» (antiguo «Mi PC», se trata como VPS). user: el usuario de Wichinion (el nombre de tu cuenta; «opencode» en los servidores de siempre, nombre conservado por compatibilidad). */
   añadir(nombre, tipo, url, clave, user) {
     const u = this.normalizarUrl(url, tipo);
     let host = u; try { host = new URL(u).host; } catch { /* queda la dirección */ }
@@ -669,7 +669,7 @@ async function responderPermiso(p, decision) {
 }
 
 /* ───────────── enviar ───────────── */
-/** Si la conversación quedó con el modelo gratuito de OpenCode (sin cupo), la pasa a NVIDIA antes de enviar. */
+/** Si la conversación quedó con el modelo gratuito de un servidor anterior (sin cupo), la pasa a NVIDIA antes de enviar. */
 async function asegurarNvidia() {
   const s = S.actual; if (!s || S.elegidoAMano) return;
   try {
@@ -766,6 +766,9 @@ function iniciarUI() {
   $('btn-atras').addEventListener('click', () => { if (window.Extra && S.actual) Extra.alCerrarChat(S.actual.id); S.actual = null; vista('v-inicio'); if (window.Shell) Shell.pintarInicio(); void cargarSesiones().catch(() => {}); });
   $('btn-parar').addEventListener('click', async () => { try { await S.api.post(`/api/session/${S.actual.id}/interrupt`); } catch (e) { toast('No se pudo detener: ' + e.message); } });
   $('btn-modelo').addEventListener('click', () => { if (window.Extra) void Extra.abrirModelos(); });
+  $('btn-agente').addEventListener('click', () => { if (window.Extra) void Extra.abrirAgentes(); });
+  $('ag-cerrar').addEventListener('click', () => $('dlg-agente').close());
+  $('ag-aprobar').addEventListener('click', () => { $('dlg-agente').close(); if (window.Extra) void Extra.aprobarPlan(); });
   $('k-cancelar').addEventListener('click', () => $('dlg-clave').close());
   $('form-clave').addEventListener('submit', async (e) => {
     e.preventDefault();

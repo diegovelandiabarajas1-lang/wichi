@@ -1,5 +1,5 @@
 'use strict';
-const VERSION_PWA = '0.6.0';
+const VERSION_PWA = '0.6.1';
 /* Wichi PWA: funciones que igualan a la app de Android (APK).
    Modelos, comandos «/», adjuntos, archivos del agente (entregas), conectores (MCP), consumo de tokens,
    respaldo de conversaciones, renombrar/archivar/eliminar y ajustes. Todo vive en este dispositivo (IndexedDB y localStorage). */
@@ -166,6 +166,80 @@ Object.assign(Api.prototype, {
         if (!auto) S.elegidoAMano = true;
       } catch (e) { toast('No se pudo cambiar el modelo: ' + e.message, 5000); }
     },
+    /* ───────────── agentes y «Mi Wichi» (perfil de la cuenta, en el servidor) ───────────── */
+    agentes: [], agenteActivo: 'wichi', perfil: null,
+    async cargarAgentes() {
+      try {
+        const d = ((await S.api.get('/api/wichi/perfil')) || {}).data;
+        if (!d || !d.perfil) return false;
+        this.perfil = d.perfil; this.agenteActivo = d.perfil.agenteActivo || 'wichi';
+        this.agentes = [...(d.agentesBase || []), ...(d.perfil.agentes || [])].filter((a) => !a.oculto).map((a) => ({ id: a.id, nombre: a.nombre || a.id, descripcion: a.descripcion || '' }));
+        return true;
+      } catch { this.agentes = []; return false; }
+    },
+    async abrirAgentes() {
+      const lista = $('lista-agentes');
+      lista.innerHTML = '<p class="suave">Cargando…</p>';
+      $('ag-aprobar').hidden = true;
+      $('dlg-agente').showModal();
+      const ok = await this.cargarAgentes();
+      if (!ok || !this.agentes.length) { lista.innerHTML = '<p class="suave">Este servidor no admite agentes (necesita Wichinion 0.4 o posterior).</p>'; return; }
+      const actual = (S.actual && S.actual.agent) || this.agenteActivo;
+      lista.innerHTML = '';
+      for (const a of this.agentes) {
+        const b = document.createElement('button');
+        b.className = 'btn ancho opcion' + (a.id === actual ? ' elegido' : '');
+        b.innerHTML = `<span>${esc(a.nombre)}</span><small>${esc(a.descripcion)}</small>`;
+        b.addEventListener('click', async () => { $('dlg-agente').close(); await this.cambiarAgente(a.id); });
+        lista.appendChild(b);
+      }
+      $('ag-aprobar').hidden = actual !== 'planificar';
+    },
+    async cambiarAgente(id) {
+      if (!S.actual) return false;
+      try {
+        await S.api.call('PATCH', `/api/session/${S.actual.id}`, { agent: id });
+        S.actual = { ...S.actual, agent: id };
+        const a = this.agentes.find((x) => x.id === id);
+        toast('Agente: ' + (a ? a.nombre : id));
+        return true;
+      } catch (e) { toast('No se pudo cambiar el agente: ' + e.message, 5000); return false; }
+    },
+    async aprobarPlan() {
+      if (!S.actual || !(await this.cambiarAgente('wichi'))) return;
+      try { await S.api.post(`/api/session/${S.actual.id}/prompt`, { text: 'El plan está aprobado. Ejecútalo paso a paso y ve marcando cada paso en la lista (todo).' }); }
+      catch (e) { toast('No se pudo enviar: ' + e.message, 5000); }
+    },
+    async pintarMiWichi() {
+      const cont = $('aj-miwichi'); if (!cont || !S.api) return;
+      if (!(await this.cargarAgentes())) { cont.innerHTML = ''; return; }
+      const p = this.perfil; const pers = p.personalidad || {};
+      const Voz = window.SpeechRecognition || window.webkitSpeechRecognition;
+      cont.innerHTML = `<div class="tarjeta"><h3>Mi Wichi</h3>
+        <p>Se guarda en tu servidor, así el celular, el PC y la web usan lo mismo. Los agentes propios, los ganchos y la memoria se editan en Wichi para PC (Ajustes → Cuenta → Mi Wichi).</p>
+        <label class="campo"><span>Nombre de voz (cómo lo llamas)</span><span class="con-boton"><input id="mw-nombre" type="text" autocomplete="off" autocapitalize="off" value="${esc(p.vozNombre || 'wichi')}">${Voz ? '<button type="button" id="mw-decir">🎤 Decirlo</button>' : ''}</span></label>
+        <p class="suave" id="mw-voz-ayuda">${Voz ? 'Escríbelo o pulsa «Decirlo» y tu navegador lo transcribe (en Chrome para Android lo hace Google; en el iPhone, Apple). En el celular con la app Android, «Hey …» lo usa para activarse.' : 'Este navegador no puede transcribir voz: escribe el nombre.'}</p>
+        <label class="campo"><span><input type="checkbox" id="mw-pers-on" ${pers.activa ? 'checked' : ''}> Usar mi propia personalidad (system prompt)</span></label>
+        <textarea id="mw-pers" rows="5" style="width:100%" placeholder="Eres Jarvis, un mayordomo ingenioso y breve…">${esc(pers.texto || '')}</textarea>
+        <label class="campo"><span>Agente activo</span><select id="mw-agente">${this.agentes.map((a) => `<option value="${esc(a.id)}" ${a.id === this.agenteActivo ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</select></label>
+        <div class="fila-btn"><button class="btn principal" id="mw-guardar" type="button">Guardar</button></div><p id="mw-msg"></p></div>`;
+      const q = (id) => cont.querySelector('#' + id);
+      const dec = q('mw-decir');
+      if (dec && Voz) dec.addEventListener('click', () => {
+        try {
+          const r = new Voz(); r.lang = navigator.language || 'es-ES'; r.interimResults = false; r.maxAlternatives = 1;
+          r.onresult = (e) => { const t = String(e.results[0][0].transcript || '').trim(); q('mw-nombre').value = t.replace(/^(hey|ey|oye|ok|okay)\s+/i, '').trim() || t; q('mw-msg').textContent = `Entendí: «${t}». Revisa cómo lo escribió y pulsa Guardar.`; };
+          r.onerror = () => { q('mw-msg').textContent = 'No pude oírte (¿diste permiso al micrófono?).'; };
+          r.start(); q('mw-msg').textContent = 'Te escucho… di el nombre.';
+        } catch { q('mw-msg').textContent = 'No se pudo usar el micrófono.'; }
+      });
+      q('mw-guardar').addEventListener('click', async () => {
+        const nuevo = { ...p, vozNombre: q('mw-nombre').value.trim() || 'wichi', personalidad: { activa: q('mw-pers-on').checked, texto: q('mw-pers').value }, agenteActivo: q('mw-agente').value };
+        try { const r = await S.api.call('PUT', '/api/wichi/perfil', nuevo); this.perfil = (r && r.data && r.data.perfil) || nuevo; this.agenteActivo = this.perfil.agenteActivo; q('mw-msg').textContent = '✓ Guardado.'; }
+        catch (e) { q('mw-msg').textContent = 'No se pudo guardar: ' + e.message; }
+      });
+    },
+
     async abrirModelos() {
       const lista = $('lista-modelos');
       lista.innerHTML = '<p class="suave">Cargando…</p>';
@@ -543,6 +617,7 @@ Object.assign(Api.prototype, {
         ${ses
           ? `<div class="tarjeta"><h3>Mi cuenta</h3><p>Sesión iniciada como «${esc(ses.nombre)}». Tu nombre y tu contraseña son también el usuario y la contraseña de tu servidor Wichinion. Se guardan solo en este dispositivo.</p><div class="fila-btn"><button class="btn texto" id="aj-cerrar-sesion" type="button">Cerrar sesión</button></div></div>`
           : `<div class="tarjeta"><h3>Mi cuenta</h3><p>Sin cuenta en este dispositivo.</p><div class="fila-btn"><button class="btn tonal" id="aj-crear-cuenta" type="button">Crear cuenta o iniciar sesión</button></div></div>`}
+        <div id="aj-miwichi"></div>
         <div class="tarjeta"><h3>Actualizaciones</h3>
           <p>Versión ${VERSION_PWA} · uso sin conexión: ${estadoSw}. Esta app se actualiza sola al abrirla con internet.</p>
           <div class="fila-btn"><button class="btn tonal" id="aj-act" type="button">Buscar actualización</button></div></div>
@@ -593,6 +668,7 @@ Object.assign(Api.prototype, {
       $$('#aj-guias').addEventListener('click', () => { if (window.Guias) { if (Sesion.leer()) Guias.hospedaje(); else Guias.cuenta(); } });
       $$('#aj-cambiar').addEventListener('click', () => { detenerEventos(); S.api = null; pintarCuentas(); });
       void this.contarRespaldos();
+      void this.pintarMiWichi();
     },
     async contarRespaldos() {
       if (!S.cuenta) return;

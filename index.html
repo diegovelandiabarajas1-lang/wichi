@@ -121,6 +121,7 @@
     <header class="barra">
       <button id="btn-atras" class="icono" aria-label="Volver">←</button>
       <div class="titulo"><span id="titulo-chat">Conversación</span><button id="modelo-chat" class="modelo-btn" type="button" aria-label="Cambiar de modelo"></button></div>
+      <button id="btn-agente" class="btn texto" type="button" aria-label="Cambiar de agente">🧠</button>
       <button id="btn-modelo" class="btn texto">Modelo</button>
     </header>
     <div id="chat-offline" class="banner-error" hidden>Sin conexión con el servidor. Reintentando…</div>
@@ -263,6 +264,14 @@
       <button type="submit" class="btn principal">Guardar en el servidor</button>
     </menu>
   </form>
+</dialog>
+
+<dialog id="dlg-agente">
+  <h3>Agente de esta conversación</h3>
+  <p class="t-suave t-pequeno">El agente decide qué sabe y qué puede hacer Wichi. Los propios se crean en Wichi para PC (Mi Wichi).</p>
+  <div id="lista-agentes" class="lista"></div>
+  <button type="button" class="btn principal ancho" id="ag-aprobar" hidden>✔ Aprobar plan y ejecutar</button>
+  <menu><button type="button" class="btn texto" id="ag-cerrar">Cerrar</button></menu>
 </dialog>
 
 <dialog id="dlg-modelo">

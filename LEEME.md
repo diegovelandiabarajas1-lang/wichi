@@ -16,7 +16,7 @@ Tema negro grisáceo fijo (los mismos colores de `MainActivity.kt`), botones en 
 - **Chat:** respuesta en directo (SSE), Markdown y bloques de código con «Copiar», herramientas y razonamiento agrupados en una píldora plegable, «Pensando…», «Copiar» bajo cada respuesta, **«Cargar mensajes anteriores»**, «↓ Al final», línea de tokens, aviso «Sin conexión con el servidor», botón ■ para detener, permisos (una vez / siempre / rechazar), barra de **Archivos del agente**, tarjeta de la clave de NVIDIA y botón **Modelo**. El «＋» del compositor adjunta archivos o elige un comando «/» del servidor.
 - **Ajustes:** Avisos, Mi clave de NVIDIA, Mi cuenta (cerrar sesión), Actualizaciones, Voz y música (con la tarjeta de **Spotify**), Conectores (MCP), Copia de seguridad y Cuentas (renombrar, QR, olvidar, añadir, escanear QR, crear mi servidor).
 - **Consumo de tokens:** semana, mes y año, barras de las últimas 12 semanas/12 meses/años, por modelo y por servidor. El libro vive en este dispositivo.
-- Habla con OpenCode y con **Wichinion** (misma API). Cuentas con **usuario** (el nombre de tu cuenta de Wichi en Wichinion) y tipo ☁ Cloud / 🖥 Mi VPS.
+- Habla con **Wichinion**, el motor de Wichi (Cowork en Render o tu servidor propio), por su API HTTP. Cuentas con **usuario** (el nombre de tu cuenta de Wichi en Wichinion) y tipo ☁ Cloud / 🖥 Mi VPS.
 
 ## Voz y acciones del teléfono (como en el APK)
 - **Modo de voz (botón «Hablar»):** hablas, Wichi responde en voz alta y vuelve a escucharte (conversación continua) hasta que no digas nada o te despidas («gracias», «adiós», «eso es todo»). Si el agente pide un permiso, te lo pregunta con botones. Usa el reconocimiento y la voz del navegador (Web Speech). El micrófono de al lado dicta en el cuadro de texto.
@@ -39,8 +39,7 @@ Tema negro grisáceo fijo (los mismos colores de `MainActivity.kt`), botones en 
 
 ## Lo que el servidor debe permitir (CORS)
 La PWA es una página web: el navegador solo la deja hablar con un servidor que acepte su dirección (`https://diegovelandiabarajas1-lang.github.io`).
-- **Wichinion:** ya lo trae. Arrancarlo con `MOTOR_CORS=https://diegovelandiabarajas1-lang.github.io`.
-- **OpenCode (Cowork en Render, Docker local):** de fábrica solo acepta *localhost* y los dominios de opencode.ai. Hay que arrancarlo permitiendo ese origen (la opción `--cors` de `opencode serve`) y, en Render, volver a desplegar. **Sin esto, la PWA no conecta con esos servidores.**
+- **Wichinion:** ya lo trae. Arrancarlo con `MOTOR_CORS=https://diegovelandiabarajas1-lang.github.io`. En Render, vuelve a desplegar tras cambiar la variable. **Sin esto, la PWA no conecta con ese servidor.**
 - **Servidores http en la red local:** desde una página https el navegador los bloquea. Hace falta un túnel https para ese caso.
 
 ## Privacidad
