@@ -196,6 +196,9 @@
     m.hidden = false;
   }
 
+  /** Primera frase de la descripción (el menú de «/» es de una línea por comando). */
+  function cortaDesc(d) { d = String(d || '').replace(/\s+/g, ' ').trim(); const i = d.search(/[.:]/); if (i > 8) d = d.slice(0, i); return d.length > 56 ? d.slice(0, 55).trimEnd() + '…' : d; }
+
   /** «＋» del chat: adjuntar un archivo o elegir un comando «/» del servidor. */
   function menuMas() {
     const m = el('menu-mas');
@@ -205,8 +208,8 @@
     a.addEventListener('click', () => { m.hidden = true; el('in-archivos').click(); });
     m.appendChild(a);
     for (const c of ((window.Extra && Extra.comandos) || [])) {
-      const b = document.createElement('button'); b.type = 'button';
-      b.innerHTML = `/${esc(c.name)}${c.description ? `<small>${esc(c.description)}</small>` : ''}`;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'cmd1';
+      b.innerHTML = `<b>/${esc(c.name)}</b>${c.description ? `<small>${esc(cortaDesc(c.description))}</small>` : ''}`;
       b.addEventListener('click', () => { m.hidden = true; const t = el('entrada'); t.value = '/' + c.name + ' '; ajustarAltura(t); Shell.actualizarComposer(); t.focus(); });
       m.appendChild(b);
     }

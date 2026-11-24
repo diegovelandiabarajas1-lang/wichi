@@ -26,6 +26,7 @@
 .menu-flotante.arriba { top: auto; bottom: calc(100% + 8px); max-height: 52vh; overflow-y: auto; min-width: 250px; }
 .menu-flotante button { background: none; border: 0; color: var(--texto); font: inherit; font-size: 15px; text-align: left; padding: 12px 14px; border-radius: 10px; cursor: pointer; }
 .menu-flotante button:active { background: var(--panel2); }
+.menu-flotante button.cmd1 { display: flex; align-items: center; gap: 8px; padding: 9px 12px; font-size: 14px; } .menu-flotante button.cmd1 b { font-weight: 500; white-space: nowrap; } .menu-flotante button.cmd1 small { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu-flotante small { display: block; color: var(--suave); font-size: 12px; }
 
 /* ───────── Conectar ───────── */
@@ -248,3 +249,6 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; ma
 .item.col .txt { flex-basis: 100%; }
 .icono-redondo.grabando { background: var(--error-fondo); box-shadow: 0 0 0 2px var(--error); }
 .tarjeta .con-boton input { padding-right: 84px; }
+/* Modo de la conversación (Plan / Build / Auto) */
+#btn-modo.modo-plan { background: #1f3a5f; color: #9cc4ff; }
+#btn-modo.modo-auto { background: #5a2e1a; color: #ffb27a; }

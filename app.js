@@ -184,6 +184,8 @@ function parseSesion(o) {
     directory: String((o.location && o.location.directory) || ''),
     model: m ? `${m.providerID || ''}/${m.id || ''}` : '',
     archived: !!(o.archived || (o.time && o.time.archived)),
+    agent: String(o.agent || ''),
+    modo: o.modo === 'plan' || o.modo === 'auto' ? o.modo : '',
   };
 }
 function parseMensajes(arr) {
@@ -394,6 +396,7 @@ async function nuevaSesion(dir) {
 async function abrirSesion(s) {
   S.actual = s; S.items = []; S.antes = []; S.cursorAntes = null; S.tokens = ''; S.pegado = true; S.busy = false; S.elegidoAMano = false;
   vista('v-chat');
+  if (window.Extra) Extra.pintarModo();
   $('titulo-chat').textContent = s.title;
   $('modelo-chat').textContent = (s.model || '').split('/').pop() || 'modelo por defecto';
   $('mensajes').innerHTML = '';
@@ -427,6 +430,7 @@ async function refrescarChat() {
     if (sess && S.actual && S.actual.id === s.id) {
       S.actual = parseSesion(sess);
       $('titulo-chat').textContent = S.actual.title; $('modelo-chat').textContent = (S.actual.model || '').split('/').pop() || 'modelo por defecto';
+      if (window.Extra) Extra.pintarModo();
     }
     if (S.offline) { S.offline = false; pintarOffline(); }
   } catch (e) { nota('No se pudo leer la conversación: ' + e.message); }
@@ -610,6 +614,7 @@ function manejarEvento(ev) {
   const mid = String(data.assistantMessageID || ''); const ord = Number(data.ordinal || 0);
   const kt = `live:text:${mid}:${ord}`; const kr = `live:think:${mid}:${ord}`;
   switch (type) {
+    case 'session.mode.changed': S.actual = { ...S.actual, modo: data.modo === 'plan' || data.modo === 'auto' ? data.modo : '' }; if (window.Extra) Extra.pintarModo(); break;
     case 'session.execution.started': S.busy = true; pintarBusy(); break;
     case 'session.execution.succeeded': case 'session.execution.failed': case 'session.execution.interrupted':
       S.busy = false; pintarBusy(); setTimeout(() => void refrescarChat(), 300); void cargarSesiones().catch(() => {}); if (window.Extra) Extra.alTurno(sid);
@@ -767,6 +772,10 @@ function iniciarUI() {
   $('btn-parar').addEventListener('click', async () => { try { await S.api.post(`/api/session/${S.actual.id}/interrupt`); } catch (e) { toast('No se pudo detener: ' + e.message); } });
   $('btn-modelo').addEventListener('click', () => { if (window.Extra) void Extra.abrirModelos(); });
   $('btn-agente').addEventListener('click', () => { if (window.Extra) void Extra.abrirAgentes(); });
+  $('btn-modo').addEventListener('click', () => { if (window.Extra) Extra.abrirModos(); });
+  $('modo-cerrar').addEventListener('click', () => $('dlg-modo').close());
+  $('auto-no').addEventListener('click', () => $('dlg-auto').close());
+  $('auto-si').addEventListener('click', () => { $('dlg-auto').close(); if (window.Extra) void Extra.cambiarModo('auto', true); });
   $('ag-cerrar').addEventListener('click', () => $('dlg-agente').close());
   $('ag-aprobar').addEventListener('click', () => { $('dlg-agente').close(); if (window.Extra) void Extra.aprobarPlan(); });
   $('k-cancelar').addEventListener('click', () => $('dlg-clave').close());

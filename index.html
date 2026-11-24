@@ -121,6 +121,7 @@
     <header class="barra">
       <button id="btn-atras" class="icono" aria-label="Volver">←</button>
       <div class="titulo"><span id="titulo-chat">Conversación</span><button id="modelo-chat" class="modelo-btn" type="button" aria-label="Cambiar de modelo"></button></div>
+      <button id="btn-modo" class="btn texto" type="button" aria-label="Cambiar de modo (Plan, Build o Auto)">🛠 Build</button>
       <button id="btn-agente" class="btn texto" type="button" aria-label="Cambiar de agente">🧠</button>
       <button id="btn-modelo" class="btn texto">Modelo</button>
     </header>
@@ -264,6 +265,20 @@
       <button type="submit" class="btn principal">Guardar en el servidor</button>
     </menu>
   </form>
+</dialog>
+
+<dialog id="dlg-modo">
+  <h3>Modo de esta conversación</h3>
+  <p class="t-suave t-pequeno">Decide cuánto puede hacer Wichi sin preguntarte. Vale desde su siguiente paso, aunque esté trabajando.</p>
+  <div id="lista-modos" class="lista"></div>
+  <menu><button type="button" class="btn texto" id="modo-cerrar">Cerrar</button></menu>
+</dialog>
+
+<dialog id="dlg-auto">
+  <h3>¿Pasar a modo Auto?</h3>
+  <p>En modo Auto, Wichi podrá ejecutar comandos, crear y borrar archivos, usar la VM y tu navegador <b>sin preguntarte</b>, incluso después de leer páginas de internet (que podrían intentar engañarlo). Solo seguirá preguntando al escribir archivos de configuración del agente.</p>
+  <p class="t-suave t-pequeno">Úsalo en carpetas que no te importe perder. Puedes volver a Build o Plan cuando quieras.</p>
+  <menu><button type="button" class="btn texto" id="auto-no">Cancelar</button><button type="button" class="btn principal" id="auto-si">Sí, modo Auto</button></menu>
 </dialog>
 
 <dialog id="dlg-agente">

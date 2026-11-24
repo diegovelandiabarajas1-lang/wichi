@@ -1,5 +1,5 @@
 'use strict';
-const VERSION_PWA = '0.6.1';
+const VERSION_PWA = '0.6.3';
 /* Wichi PWA: funciones que igualan a la app de Android (APK).
    Modelos, comandos «/», adjuntos, archivos del agente (entregas), conectores (MCP), consumo de tokens,
    respaldo de conversaciones, renombrar/archivar/eliminar y ajustes. Todo vive en este dispositivo (IndexedDB y localStorage). */
@@ -204,6 +204,46 @@ Object.assign(Api.prototype, {
         toast('Agente: ' + (a ? a.nombre : id));
         return true;
       } catch (e) { toast('No se pudo cambiar el agente: ' + e.message, 5000); return false; }
+    },
+    /* ───────────── modo de la conversación: Plan (solo lectura) / Build (el normal) / Auto (ejecuta todo sin preguntar) ───────────── */
+    modos: [
+      { id: 'plan', icono: '📖', nombre: 'Plan', desc: 'Solo lectura: explora y propone un plan. No escribe, no ejecuta comandos ni usa la VM o el navegador.' },
+      { id: 'build', icono: '🛠', nombre: 'Build', desc: 'El normal: ejecuta lo que ya le dijiste «Sí» o «Siempre»; lo demás te lo pregunta.' },
+      { id: 'auto', icono: '⚡', nombre: 'Auto', desc: 'Ejecuta todo sin preguntarte (comandos, archivos, VM, navegador). Solo pregunta al tocar archivos de configuración del agente.' },
+    ],
+    modoActual() { const m = S.actual && S.actual.modo; return m === 'plan' || m === 'auto' ? m : 'build'; },
+    pintarModo() {
+      const b = $('btn-modo'); if (!b) return;
+      const id = this.modoActual(); const m = this.modos.find((x) => x.id === id);
+      b.textContent = m.icono + ' ' + m.nombre;
+      b.classList.toggle('modo-plan', id === 'plan'); b.classList.toggle('modo-auto', id === 'auto');
+    },
+    abrirModos() {
+      if (!S.actual) return;
+      const lista = $('lista-modos'); lista.innerHTML = '';
+      const actual = this.modoActual();
+      for (const m of this.modos) {
+        const b = document.createElement('button');
+        b.className = 'btn ancho opcion' + (m.id === actual ? ' elegido' : '');
+        b.innerHTML = `<span>${m.icono} ${esc(m.nombre)}</span><small>${esc(m.desc)}</small>`;
+        b.addEventListener('click', () => {
+          $('dlg-modo').close();
+          if (m.id === actual) return;
+          if (m.id === 'auto') $('dlg-auto').showModal(); else void this.cambiarModo(m.id, true);
+        });
+        lista.appendChild(b);
+      }
+      $('dlg-modo').showModal();
+    },
+    async cambiarModo(id, avisar) {
+      if (!S.actual) return false;
+      try {
+        await S.api.call('PATCH', `/api/session/${S.actual.id}`, { modo: id });
+        S.actual = { ...S.actual, modo: id === 'build' ? '' : id };
+        this.pintarModo();
+        if (avisar) toast('Modo ' + this.modos.find((x) => x.id === id).nombre);
+        return true;
+      } catch (e) { toast('No se pudo cambiar el modo: ' + e.message + (/404|400/.test(String(e.message)) ? ' (el servidor necesita Wichinion 0.4.2 o posterior)' : ''), 5000); return false; }
     },
     async aprobarPlan() {
       if (!S.actual || !(await this.cambiarAgente('wichi'))) return;
