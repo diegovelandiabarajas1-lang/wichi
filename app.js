@@ -186,6 +186,7 @@ function parseSesion(o) {
     archived: !!(o.archived || (o.time && o.time.archived)),
     agent: String(o.agent || ''),
     modo: o.modo === 'plan' || o.modo === 'auto' ? o.modo : '',
+    equipo: !!o.equipo,
   };
 }
 function parseMensajes(arr) {
@@ -614,6 +615,8 @@ function manejarEvento(ev) {
   const mid = String(data.assistantMessageID || ''); const ord = Number(data.ordinal || 0);
   const kt = `live:text:${mid}:${ord}`; const kr = `live:think:${mid}:${ord}`;
   switch (type) {
+    case 'session.team.changed': S.actual = { ...S.actual, equipo: !!data.activo }; if (!data.activo && window.Extra) Extra.equipo = null; if (window.Extra) Extra.pintarEquipo(); break;
+    case 'session.team.updated': if (window.Extra) { Extra.equipo = data.equipo || null; Extra.pintarEquipo(); } break;
     case 'session.mode.changed': S.actual = { ...S.actual, modo: data.modo === 'plan' || data.modo === 'auto' ? data.modo : '' }; if (window.Extra) Extra.pintarModo(); break;
     case 'session.execution.started': S.busy = true; pintarBusy(); break;
     case 'session.execution.succeeded': case 'session.execution.failed': case 'session.execution.interrupted':
@@ -773,6 +776,8 @@ function iniciarUI() {
   $('btn-modelo').addEventListener('click', () => { if (window.Extra) void Extra.abrirModelos(); });
   $('btn-agente').addEventListener('click', () => { if (window.Extra) void Extra.abrirAgentes(); });
   $('btn-modo').addEventListener('click', () => { if (window.Extra) Extra.abrirModos(); });
+  $('btn-equipo').addEventListener('click', () => { if (window.Extra) Extra.abrirEquipo(); });
+  $('equipo-cerrar').addEventListener('click', () => $('dlg-equipo').close());
   $('modo-cerrar').addEventListener('click', () => $('dlg-modo').close());
   $('auto-no').addEventListener('click', () => $('dlg-auto').close());
   $('auto-si').addEventListener('click', () => { $('dlg-auto').close(); if (window.Extra) void Extra.cambiarModo('auto', true); });

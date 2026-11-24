@@ -1,5 +1,5 @@
 'use strict';
-const VERSION_PWA = '0.6.3';
+const VERSION_PWA = '0.6.4';
 /* Wichi PWA: funciones que igualan a la app de Android (APK).
    Modelos, comandos «/», adjuntos, archivos del agente (entregas), conectores (MCP), consumo de tokens,
    respaldo de conversaciones, renombrar/archivar/eliminar y ajustes. Todo vive en este dispositivo (IndexedDB y localStorage). */
@@ -217,6 +217,7 @@ Object.assign(Api.prototype, {
       const id = this.modoActual(); const m = this.modos.find((x) => x.id === id);
       b.textContent = m.icono + ' ' + m.nombre;
       b.classList.toggle('modo-plan', id === 'plan'); b.classList.toggle('modo-auto', id === 'auto');
+      if (this.pintarEquipo) this.pintarEquipo();
     },
     abrirModos() {
       if (!S.actual) return;
@@ -244,6 +245,59 @@ Object.assign(Api.prototype, {
         if (avisar) toast('Modo ' + this.modos.find((x) => x.id === id).nombre);
         return true;
       } catch (e) { toast('No se pudo cambiar el modo: ' + e.message + (/404|400/.test(String(e.message)) ? ' (el servidor necesita Wichinion 0.4.2 o posterior)' : ''), 5000); return false; }
+    },
+    /* ───────────── modo Equipo: un orquestador reparte un proyecto complejo entre hasta 5 agentes (apagado por defecto) ───────────── */
+    equipo: null,
+    pintarEquipo() {
+      const b = $('btn-equipo'); if (!b) return;
+      const on = !!(S.actual && S.actual.equipo);
+      b.hidden = !S.actual || S.actual.modo === 'plan';
+      const n = on && this.equipo && this.equipo.miembros ? this.equipo.miembros.length : 0;
+      b.textContent = '👥' + (n ? ' ' + n : '');
+      b.classList.toggle('modo-equipo', on);
+    },
+    estadoMiembro(e) { return ({ trabajando: '⏳ trabajando', 'en-cola': '⌛ en cola', esperando: '⏸ esperando respuesta', listo: '✔ listo', fallo: '✖ falló', detenido: '■ detenido' })[e] || e; },
+    async cargarEquipo() {
+      if (!S.actual || !S.actual.equipo) return;
+      try { const r = await S.api.call('GET', `/api/session/${S.actual.id}/equipo`); this.equipo = (r && r.data) || null; this.pintarEquipo(); } catch (e) { /* servidor anterior al modo Equipo */ }
+    },
+    async abrirEquipo() {
+      if (!S.actual) return;
+      const on = !!S.actual.equipo;
+      if (on) await this.cargarEquipo();
+      const cuerpo = $('equipo-cuerpo'); cuerpo.innerHTML = '';
+      $('equipo-titulo').textContent = on ? 'Equipo de esta conversación' : '¿Activar el modo Equipo?';
+      const p = (t, cls) => { const e = document.createElement('p'); if (cls) e.className = cls; e.textContent = t; cuerpo.appendChild(e); return e; };
+      if (!on) {
+        p('Wichi pasa a ser el orquestador: puede lanzar hasta 5 agentes (cada uno con su tarea y su zona de archivos; hasta 3 con su propia pantalla de la VM) y TODO pasa por él: los agentes no se hablan entre sí, le piden las cosas a él y él decide.');
+        p('Úsalo solo en proyectos complejos: un equipo gasta bastantes más tokens que un solo agente (hay un tope de tokens y de rondas). Los miembros heredan tu modo y nunca pueden más que tú.', 't-suave t-pequeno');
+        const si = document.createElement('button'); si.className = 'btn principal ancho'; si.textContent = 'Sí, activar equipo';
+        si.addEventListener('click', () => { $('dlg-equipo').close(); void this.cambiarEquipo(true); }); cuerpo.appendChild(si);
+      } else {
+        const t = this.equipo; const ms = (t && t.miembros) || [];
+        if (!ms.length) p('Todavía no hay miembros. Pídele a Wichi un proyecto grande y repartirá el trabajo; aquí verás quién hace qué.', 't-suave');
+        for (const m of ms) {
+          const d = document.createElement('div'); d.className = 'opcion-equipo';
+          const zona = (m.zona || []).length ? ' · zona ' + m.zona.join(', ') : ' · solo lectura';
+          d.innerHTML = `<b>${esc(m.nombre)}${m.rol ? ' · ' + esc(m.rol) : ''}</b><br><small>${esc(this.estadoMiembro(m.estado))}${m.vm ? ' · 🖥 VM' : ''}${esc(zona)} · ${Math.round((m.tokens || 0) / 1000)} k tokens</small>`;
+          cuerpo.appendChild(d);
+        }
+        if (t) p(`Rondas ${t.rondas}/${t.maxRondas} · tokens ${Math.round(t.tokens / 1000)} k de ${Math.round(t.maxTokens / 1000)} k${t.limite ? ' · ⚠ tope alcanzado' : ''}`, 't-suave t-pequeno');
+        const no = document.createElement('button'); no.className = 'btn texto ancho'; no.textContent = 'Apagar el modo Equipo';
+        no.addEventListener('click', () => { $('dlg-equipo').close(); void this.cambiarEquipo(false); }); cuerpo.appendChild(no);
+      }
+      $('dlg-equipo').showModal();
+    },
+    async cambiarEquipo(on) {
+      if (!S.actual) return false;
+      try {
+        await S.api.call('PATCH', `/api/session/${S.actual.id}`, { equipo: on });
+        S.actual = { ...S.actual, equipo: on };
+        if (!on) this.equipo = null; else await this.cargarEquipo();
+        this.pintarEquipo();
+        toast(on ? 'Modo Equipo activado' : 'Modo Equipo apagado');
+        return true;
+      } catch (e) { toast('No se pudo cambiar el modo Equipo: ' + e.message + (/404|400/.test(String(e.message)) ? ' (el servidor necesita Wichinion 0.5.0 o posterior)' : ''), 5000); return false; }
     },
     async aprobarPlan() {
       if (!S.actual || !(await this.cambiarAgente('wichi'))) return;

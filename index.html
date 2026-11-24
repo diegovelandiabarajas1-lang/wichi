@@ -121,6 +121,7 @@
     <header class="barra">
       <button id="btn-atras" class="icono" aria-label="Volver">←</button>
       <div class="titulo"><span id="titulo-chat">Conversación</span><button id="modelo-chat" class="modelo-btn" type="button" aria-label="Cambiar de modelo"></button></div>
+      <button id="btn-equipo" class="btn texto" type="button" aria-label="Modo Equipo (orquestador con hasta 5 agentes)">👥</button>
       <button id="btn-modo" class="btn texto" type="button" aria-label="Cambiar de modo (Plan, Build o Auto)">🛠 Build</button>
       <button id="btn-agente" class="btn texto" type="button" aria-label="Cambiar de agente">🧠</button>
       <button id="btn-modelo" class="btn texto">Modelo</button>
@@ -272,6 +273,12 @@
   <p class="t-suave t-pequeno">Decide cuánto puede hacer Wichi sin preguntarte. Vale desde su siguiente paso, aunque esté trabajando.</p>
   <div id="lista-modos" class="lista"></div>
   <menu><button type="button" class="btn texto" id="modo-cerrar">Cerrar</button></menu>
+</dialog>
+
+<dialog id="dlg-equipo">
+  <h3 id="equipo-titulo">Equipo</h3>
+  <div id="equipo-cuerpo"></div>
+  <menu><button type="button" class="btn texto" id="equipo-cerrar">Cerrar</button></menu>
 </dialog>
 
 <dialog id="dlg-auto">
