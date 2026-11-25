@@ -59,7 +59,7 @@ const Cuentas = {
     if (tipo === 'local' && !/:\d+(\/|$)/.test(u.replace(/^https?:\/\//i, ''))) u += ':4096';
     return u.replace(/\/+$/, '');
   },
-  /** tipo: «cowork» (☁ en la nube: Render), «vps» (🖥 Mi VPS) o «local» (antiguo «Mi PC», se trata como VPS). user: el usuario de Wichinion (el nombre de tu cuenta; «opencode» en los servidores de siempre, nombre conservado por compatibilidad). */
+  /** tipo: «cowork» (en la nube: Render), «vps» (Mi VPS) o «local» (antiguo «Mi PC», se trata como VPS). user: el usuario de Wichinion (el nombre de tu cuenta; «opencode» en los servidores de siempre, nombre conservado por compatibilidad). */
   añadir(nombre, tipo, url, clave, user) {
     const u = this.normalizarUrl(url, tipo);
     let host = u; try { host = new URL(u).host; } catch { /* queda la dirección */ }
@@ -199,7 +199,7 @@ function parseMensajes(arr) {
         const key = `${m.id}:${i}`;
         if (p.type === 'text') out.push({ kind: 'text', key, text: String(p.text || '') });
         else if (p.type === 'reasoning') out.push({ kind: 'reasoning', key, text: String(p.text || '') });
-        else out.push({ kind: 'tool', key, name: toolName(p, String(p.type)), status: toolStatus(p), summary: resumir(p.state && p.state.input), detail: detalleTool(p) });
+        else out.push({ kind: 'tool', key, name: toolName(p, String(p.type)), status: toolStatus(p), summary: resumir(p.state && p.state.input), input: p.state && p.state.input, detail: detalleTool(p) });
       });
     } else if (m.type === 'idle' && m.outcome === 'failed') {
       const e = m.error;
@@ -273,7 +273,7 @@ function pintarCuentas() {
   for (const c of Cuentas.lista) {
     const el = document.createElement('div');
     el.className = 'item';
-    el.innerHTML = `<div class="txt"><div class="t1">${c.kind === 'cowork' ? '☁' : '🖥'} ${esc(c.name)}</div><div class="t2">${esc(c.url)}</div></div><button class="mini" data-a="mas" type="button" aria-label="Más acciones">⋯</button>`;
+    el.innerHTML = `<div class="txt"><div class="t1">${c.kind === 'cowork' ? '<span class="ico" data-i="nube"></span>' : '<span class="ico" data-i="servidor"></span>'} ${esc(c.name)}</div><div class="t2">${esc(c.url)}</div></div><button class="mini" data-a="mas" type="button" aria-label="Más acciones">⋯</button>`;
     el.setAttribute('role', 'button'); el.tabIndex = 0;
     el.addEventListener('click', () => conectar(c));
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); conectar(c); } });
@@ -467,14 +467,20 @@ function construirFilas(items) {
 }
 const estadoTool = (s) => ({ completed: 'listo', success: 'listo', listo: 'listo', running: 'ejecutando…', pending: 'ejecutando…', ejecutando: 'ejecutando…', preparando: 'preparando…', error: 'falló', failed: 'falló', 'falló': 'falló' }[s] || s || '');
 
+const esTecnico = () => document.body.classList.contains('tecnico');
 function tituloTrabajo(items) {
   const tools = items.filter((i) => i.kind === 'tool');
+  if (!esTecnico() && window.Actividad && tools.length) {
+    const r = Actividad.resumen(items);
+    const corriendo0 = tools.some((t) => /^(ejecutando|preparando)/.test(estadoTool(t.status)));
+    return (r.texto || 'Trabajando') + (r.fallos ? ' · ' + r.fallos + (r.fallos === 1 ? ' falló' : ' fallaron') : '') + (corriendo0 ? ' · en curso…' : '');
+  }
   const fallaron = tools.filter((t) => estadoTool(t.status) === 'falló').length;
   const corriendo = tools.some((t) => /^(ejecutando|preparando)/.test(estadoTool(t.status)));
   let t = '';
-  if (tools.length) t += `🛠 ${tools.length} ${tools.length === 1 ? 'herramienta' : 'herramientas'}`;
+  if (tools.length) t += `${tools.length} ${tools.length === 1 ? 'herramienta' : 'herramientas'}`;
   if (items.some((i) => i.kind === 'reasoning')) t += (t ? ' · ' : '') + 'razonamiento';
-  if (fallaron) t += ` · ${fallaron} fallaron`;
+  if (fallaron) t += ` · ${fallaron} ${fallaron === 1 ? 'falló' : 'fallaron'}`;
   if (corriendo) t += ' · ejecutando…';
   return t;
 }
@@ -492,7 +498,13 @@ function nodoFila(f) {
       if (i.kind === 'reasoning') { const r = document.createElement('div'); r.className = 'razon'; r.textContent = i.text; dentro.appendChild(r); }
       else {
         const d = document.createElement('details'); d.className = 'tool-card';
-        d.innerHTML = `<summary>🛠 ${esc(i.name)}${i.status ? ' · ' + esc(estadoTool(i.status)) : ''}<span class="resumen">${esc(i.summary || '')}</span></summary><pre>${esc(i.detail)}</pre>`;
+        const fr = window.Actividad ? Actividad.frase(i.name, i.input) : null;
+        const est = estadoTool(i.status);
+        const marca = est === 'listo' ? '✓' : est === 'falló' ? '✗' : '…';
+        d.className = 'tool-card ' + (est === 'falló' ? 'fallo' : est === 'listo' ? 'ok' : 'curso');
+        d.innerHTML = fr
+          ? `<summary><span class="ico cat-${fr.cat}" data-i="${fr.cat}"></span> <span class="t-simple">${esc(fr.texto)}</span> <span class="t-marca">${marca}</span><span class="t-tecnico">${esc(Actividad.tecnico(i))}</span></summary><details class="detalle-tec"><summary>Ver el detalle técnico</summary><pre>${esc(i.detail)}</pre></details>`
+          : `<summary>${esc(i.name)}${i.status ? ' · ' + esc(est) : ''}<span class="resumen">${esc(i.summary || '')}</span></summary><pre>${esc(i.detail)}</pre>`;
         dentro.appendChild(d);
       }
     }
@@ -502,13 +514,20 @@ function nodoFila(f) {
     if (it.kind === 'user') {
       el = document.createElement('div'); el.className = 'msg user';
       el.textContent = String(it.text).split('\n\n[Archivo ')[0];
-      if (it.files && it.files.length) { for (const n of it.files) { const a = document.createElement('div'); a.className = 'archivos'; a.textContent = '📎 ' + n; el.appendChild(a); } }
+      if (it.files && it.files.length) { for (const n of it.files) { const a = document.createElement('div'); a.className = 'archivos'; a.textContent = n; el.appendChild(a); } }
     } else if (it.kind === 'text') {
       // Las líneas «ACCION: …» son para la app, no para leerlas.
       const mostrado = window.Acciones ? Acciones.separarAcciones(it.text).texto : it.text;
       el = document.createElement('div'); el.className = 'msg text';
       el.innerHTML = `<img class="marca-w" src="icons/wichi-w.png" alt="">${markdown(mostrado)}<button type="button" class="copiar-msg">⧉  Copiar</button>`;
       el.querySelector('.copiar-msg').dataset.texto = mostrado;
+    } else if (it.kind === 'checkpoint') {
+      el = document.createElement('div'); el.className = 'msg note punto';
+      const t = document.createElement('span'); t.innerHTML = '<span class="ico" data-i="guardar"></span> Guardé el estado del proyecto antes de cambiarlo'; el.appendChild(t);
+      const tec = document.createElement('span'); tec.className = 'solo-tecnico'; tec.textContent = ' · ' + String(it.text).slice(0, 90) + ' · ' + String(it.id).slice(0, 8); el.appendChild(tec);
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn texto'; b.innerHTML = '<span class="ico" data-i="volver"></span> Volver aquí';
+      b.addEventListener('click', () => void volverAPunto(it.id));
+      el.appendChild(b);
     } else {
       el = document.createElement('div'); el.className = 'msg note'; el.textContent = it.text;
     }
@@ -548,13 +567,21 @@ function pintarMensajes(abajo) {
     if (!esc2) { esc2 = document.createElement('div'); esc2.className = 'escribiendo'; esc2.dataset.key = 'escribiendo'; esc2.innerHTML = '<img src="icons/wichi-w.png" alt=""><span>Pensando…</span>'; }
     cont.appendChild(esc2);
   } else if (esc2) esc2.remove();
+  pintarEstadoVivo();
   if (abajo || S.pegado !== false || cerca) cont.scrollTop = cont.scrollHeight;
   $('btn-final').hidden = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 90 || !filas.length;
 }
 
+function pintarEstadoVivo() {
+  const el = $('estado-vivo'); if (!el) return;
+  const v = window.Actividad ? Actividad.vivo(S.items, S.busy) : null;
+  el.hidden = !v;
+  if (v) { const ei = el.querySelector('.ev-ico'); ei.className = 'ev-ico ico cat-' + v.cat; ei.setAttribute('data-i', v.cat); el.querySelector('.ev-txt').textContent = v.texto; }
+}
 function pintarBusy() {
   $('btn-parar').hidden = !S.busy;
   $('barra-ocupado').hidden = !S.busy;
+  pintarEstadoVivo();
   pintarMensajes(false);
   if (window.Shell) Shell.actualizarComposer();
 }
@@ -615,6 +642,13 @@ function manejarEvento(ev) {
   const mid = String(data.assistantMessageID || ''); const ord = Number(data.ordinal || 0);
   const kt = `live:text:${mid}:${ord}`; const kr = `live:think:${mid}:${ord}`;
   switch (type) {
+    case 'session.checkpoint': {
+      const k = 'cp:' + String(data.id || Date.now());
+      upsert(k, () => ({ kind: 'checkpoint', key: k, id: String(data.id || ''), text: String(data.etiqueta || 'Punto de restauración') }));
+      break;
+    }
+    case 'session.compacted': nota('La conversación era muy larga: resumí lo viejo para poder seguir sin perder el hilo (' + String(data.resumidos || '') + ' mensajes archivados).'); break;
+    case 'session.checkpoint.restored': nota('Volví el proyecto a un punto anterior.'); break;
     case 'session.team.changed': S.actual = { ...S.actual, equipo: !!data.activo }; if (!data.activo && window.Extra) Extra.equipo = null; if (window.Extra) Extra.pintarEquipo(); break;
     case 'session.team.updated': if (window.Extra) { Extra.equipo = data.equipo || null; Extra.pintarEquipo(); } break;
     case 'session.mode.changed': S.actual = { ...S.actual, modo: data.modo === 'plan' || data.modo === 'auto' ? data.modo : '' }; if (window.Extra) Extra.pintarModo(); break;
@@ -628,10 +662,10 @@ function manejarEvento(ev) {
     case 'session.text.delta': upsert(kt, (o) => ({ kind: 'text', key: kt, text: ((o && o.text) || '') + String(data.delta || '') })); break;
     case 'session.reasoning.started': upsert(kr, () => ({ kind: 'reasoning', key: kr, text: '' })); break;
     case 'session.reasoning.delta': upsert(kr, (o) => ({ kind: 'reasoning', key: kr, text: ((o && o.text) || '') + String(data.delta || '') })); break;
-    case 'session.tool.input.started': { const k = 'live:tool:' + toolKey(data); upsert(k, () => ({ kind: 'tool', key: k, name: String(data.name || 'herramienta'), status: 'preparando', summary: '', detail: '' })); break; }
+    case 'session.tool.input.started': { const k = 'live:tool:' + toolKey(data); upsert(k, () => ({ kind: 'tool', key: k, name: String(data.name || 'herramienta'), status: 'preparando', summary: '', input: null, detail: '' })); break; }
     case 'session.tool.called': {
       const k = 'live:tool:' + toolKey(data); const inp = data.input || (data.state && data.state.input);
-      upsert(k, (o) => ({ kind: 'tool', key: k, name: o && o.name && o.name !== 'herramienta' ? o.name : toolName(data, 'herramienta'), status: 'ejecutando', summary: resumir(inp), detail: inp ? JSON.stringify(inp, null, 2).slice(0, 1500) : (o && o.detail) || '' }));
+      upsert(k, (o) => ({ kind: 'tool', key: k, name: o && o.name && o.name !== 'herramienta' ? o.name : toolName(data, 'herramienta'), status: 'ejecutando', summary: resumir(inp), input: inp || null, detail: inp ? JSON.stringify(inp, null, 2).slice(0, 1500) : (o && o.detail) || '' }));
       break;
     }
     case 'session.tool.success': case 'session.tool.failed': {
@@ -639,11 +673,23 @@ function manejarEvento(ev) {
       upsert(k, (o) => {
         let out = (o && o.detail) || '';
         for (const c of data.content || []) if (c && c.type === 'text') out += '\n\n' + String(c.text).slice(0, 2500);
-        return { kind: 'tool', key: k, name: (o && o.name) || toolName(data, 'herramienta'), status: type.endsWith('success') ? 'listo' : 'falló', summary: (o && o.summary) || '', detail: out.trim() || JSON.stringify(data).slice(0, 1500) };
+        return { kind: 'tool', key: k, name: (o && o.name) || toolName(data, 'herramienta'), status: type.endsWith('success') ? 'listo' : 'falló', summary: (o && o.summary) || '', input: (o && o.input) || null, detail: out.trim() || JSON.stringify(data).slice(0, 1500) };
       });
       break;
     }
   }
+}
+
+/* ───────────── volver a un punto de restauración ───────────── */
+async function volverAPunto(id) {
+  if (!S.actual || !id) return;
+  try {
+    const v = await S.api.get('/api/session/' + S.actual.id + '/puntos/' + id + '/vista');
+    const lista = ((v && v.data) || []).slice(0, 12).map((x) => (x.estado === 'D' ? 'Se recuperará: ' : x.estado === 'A' ? 'Se quitará: ' : 'Se restaurará: ') + x.archivo);
+    const txt = lista.length ? lista.join('\n') : 'No hay diferencias con el estado actual.';
+    if (!window.confirm('¿Volver el proyecto a ese punto?\n\n' + txt + '\n\nEl estado actual también se guarda, así que se puede deshacer.')) return;
+    await S.api.post('/api/session/' + S.actual.id + '/puntos/' + id + '/restaurar', {});
+  } catch (e) { nota('No se pudo volver atrás: ' + e.message); }
 }
 
 /* ───────────── permisos ───────────── */
@@ -665,7 +711,12 @@ function pintarPermisos() {
   cont.innerHTML = '';
   for (const p of S.permisos.filter((x) => !S.actual || x.sessionID === S.actual.id)) {
     const el = document.createElement('div'); el.className = 'permiso';
-    el.innerHTML = `<div><b>Permiso:</b> ${esc(p.action || 'acción')}${p.message ? ' · ' + esc(p.message) : ''}</div>${p.resources.length ? '<div><code>' + esc(p.resources.join(', ')) + '</code></div>' : ''}
+    const pm = window.Actividad ? Actividad.permiso(p) : null;
+    if (pm) {
+      el.className = 'permiso' + (pm.irreversible ? ' irreversible' : '');
+      el.innerHTML = `${pm.irreversible ? '<div class="p-alerta"><span class="ico" data-i="alerta"></span> Esto no se puede deshacer</div>' : ''}<div class="p-titulo">${esc(pm.titulo)}</div>${pm.motivo ? '<div class="p-motivo">' + esc(pm.motivo) + '</div>' : ''}<div class="p-tecnico"><code>${esc(pm.tecnico)}</code></div>
+      <div class="acciones"><button class="btn principal" data-d="once">Permitir esta vez</button>${pm.irreversible ? '' : '<button class="btn" data-d="always">Siempre</button>'}<button class="btn" data-d="reject">No permitir</button></div>`;
+    } else el.innerHTML = `<div><b>Permiso:</b> ${esc(p.action || 'acción')}${p.message ? ' · ' + esc(p.message) : ''}</div>${p.resources.length ? '<div><code>' + esc(p.resources.join(', ')) + '</code></div>' : ''}
       <div class="acciones"><button class="btn principal" data-d="once">Permitir una vez</button><button class="btn" data-d="always">Siempre</button><button class="btn" data-d="reject">Rechazar</button></div>`;
     el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => responderPermiso(p, b.dataset.d)));
     cont.appendChild(el);
@@ -776,6 +827,9 @@ function iniciarUI() {
   $('btn-modelo').addEventListener('click', () => { if (window.Extra) void Extra.abrirModelos(); });
   $('btn-agente').addEventListener('click', () => { if (window.Extra) void Extra.abrirAgentes(); });
   $('btn-modo').addEventListener('click', () => { if (window.Extra) Extra.abrirModos(); });
+  const aplicarTecnico = (on) => { document.body.classList.toggle('tecnico', on); const b = $('btn-tecnico'); if (b) { b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.classList.toggle('activo', on); } pintarMensajes(false); };
+  aplicarTecnico(leerLS('wichi.tecnico') === '1');
+  $('btn-tecnico').addEventListener('click', () => { const on = !document.body.classList.contains('tecnico'); guardarLS('wichi.tecnico', on ? '1' : '0'); aplicarTecnico(on); });
   $('btn-equipo').addEventListener('click', () => { if (window.Extra) Extra.abrirEquipo(); });
   $('equipo-cerrar').addEventListener('click', () => $('dlg-equipo').close());
   $('modo-cerrar').addEventListener('click', () => $('dlg-modo').close());

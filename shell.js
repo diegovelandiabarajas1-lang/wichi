@@ -10,7 +10,7 @@
   let homeCuenta = null;                         // cuenta elegida en el chip del inicio
   const wake = { ocupado: false, estado: 'off', t: 0 };
 
-  const icono = (c) => (c && c.kind === 'cowork' ? '☁' : '🖥');
+  const icono = () => '';
   const cuentaInicio = () => homeCuenta || S.cuenta;
   const tipoTexto = (c) => (c && c.kind === 'cowork' ? 'En la nube' : 'Mi VPS');
 
@@ -19,7 +19,7 @@
     const c = S.cuenta;
     el('nombre-cuenta').textContent = c ? c.name : 'Wichi';
     const ch = cuentaInicio();
-    el('h-chip').textContent = ch ? `${icono(ch)} ${ch.name} ▾` : '☁ Cloud ▾';
+    { const chip = el('h-chip'); chip.textContent = ''; const i = document.createElement('span'); i.className = 'ico'; i.setAttribute('data-i', ch && ch.kind !== 'cowork' ? 'servidor' : 'nube'); chip.appendChild(i); chip.appendChild(document.createTextNode(' ' + (ch ? ch.name : 'Cloud') + ' ▾')); }
     Shell.pintarRecientes(); Shell.pintarClave(); Shell.actualizarComposer();
   };
 
@@ -94,7 +94,7 @@
       const b = document.createElement('button'); b.type = 'button';
       const activo = S.cuenta && x.url === S.cuenta.url;
       b.className = 'fila' + (activo ? ' sel' : '');
-      b.innerHTML = (x.kind === 'cowork' ? '<span class="fila-ico">☁</span>' : '<img src="icons/icono-vps.png" alt="">') + `<span>${esc(x.name)}</span>` + (activo ? '<span class="pista">activo</span>' : '');
+      b.innerHTML = (x.kind === 'cowork' ? '' : '<img src="icons/icono-vps.png" alt="">') + `<span>${esc(x.name)}</span>` + (activo ? '<span class="pista">activo</span>' : '');
       b.addEventListener('click', () => { Shell.cerrarPanel(); if (!activo) void conectar(x); });
       caja.appendChild(b);
     }
@@ -144,7 +144,7 @@
     const actual = S.cuenta && S.cuenta.url;
     Cuentas.lista.forEach((c, i) => {
       const l = document.createElement('label'); l.className = 'chipradio';
-      l.innerHTML = `<input type="radio" name="nv-c" value="${esc(c.url)}"${c.url === actual || (!actual && i === 0) ? ' checked' : ''}><span>${icono(c)} ${esc(c.name)}</span>`;
+      l.innerHTML = `<input type="radio" name="nv-c" value="${esc(c.url)}"${c.url === actual || (!actual && i === 0) ? ' checked' : ''}><span>${esc(c.name)}</span>`;
       caja.appendChild(l);
     });
     el('nv-dir').value = '/workspace';
@@ -186,7 +186,7 @@
     if (!m.hidden) { m.hidden = true; return; }
     m.innerHTML = '';
     for (const c of Cuentas.lista) {
-      const b = document.createElement('button'); b.type = 'button'; b.textContent = `${icono(c)} ${c.name}`;
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = c.name;
       b.addEventListener('click', () => { homeCuenta = c; m.hidden = true; Shell.pintarInicio(); });
       m.appendChild(b);
     }
@@ -204,7 +204,7 @@
     const m = el('menu-mas');
     if (!m.hidden) { m.hidden = true; return; }
     m.innerHTML = '';
-    const a = document.createElement('button'); a.type = 'button'; a.innerHTML = '📎&nbsp; Adjuntar archivo o imagen';
+    const a = document.createElement('button'); a.type = 'button'; a.innerHTML = 'Adjuntar archivo o imagen';
     a.addEventListener('click', () => { m.hidden = true; el('in-archivos').click(); });
     m.appendChild(a);
     for (const c of ((window.Extra && Extra.comandos) || [])) {

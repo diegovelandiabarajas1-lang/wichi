@@ -71,7 +71,7 @@
           <textarea id="h-entrada" rows="1" placeholder="Pregúntale a Wichi" enterkeyhint="send" autocomplete="off"></textarea>
           <div class="composer-fila">
             <button id="h-mas" class="icono-redondo" type="button" aria-label="Adjuntar archivo o imagen"><img src="icons/clip.svg" alt=""></button>
-            <span class="menu-ancla"><button id="h-chip" class="chip-cuenta" type="button">☁ Cloud ▾</button>
+            <span class="menu-ancla"><button id="h-chip" class="chip-cuenta" type="button"><span class="ico" data-i="nube"></span> Cloud ▾</button>
               <div id="h-menu-cuentas" class="menu-flotante" hidden></div></span>
             <span class="espaciador"></span>
             <button id="h-voz" class="pildora" type="button">Hablar</button>
@@ -121,13 +121,15 @@
     <header class="barra">
       <button id="btn-atras" class="icono" aria-label="Volver">←</button>
       <div class="titulo"><span id="titulo-chat">Conversación</span><button id="modelo-chat" class="modelo-btn" type="button" aria-label="Cambiar de modelo"></button></div>
-      <button id="btn-equipo" class="btn texto" type="button" aria-label="Modo Equipo (orquestador con hasta 5 agentes)">👥</button>
-      <button id="btn-modo" class="btn texto" type="button" aria-label="Cambiar de modo (Plan, Build o Auto)">🛠 Build</button>
-      <button id="btn-agente" class="btn texto" type="button" aria-label="Cambiar de agente">🧠</button>
-      <button id="btn-modelo" class="btn texto">Modelo</button>
+      <button id="btn-equipo" class="btn texto" type="button" aria-label="Modo Equipo (orquestador con hasta 5 agentes)"><span class="ico" data-i="equipo"></span><span class="lbl">Equipo</span></button>
+      <button id="btn-tecnico" class="btn texto" type="button" aria-pressed="false" aria-label="Mostrar u ocultar el detalle técnico"><span class="ico" data-i="tecnico"></span><span class="lbl">Técnico</span></button>
+      <button id="btn-modo" class="btn texto" type="button" aria-label="Cambiar de modo (Plan, Build o Auto)"><span class="ico" data-i="build"></span><span class="lbl">Build</span></button>
+      <button id="btn-agente" class="btn texto" type="button" aria-label="Cambiar de agente"><span class="ico" data-i="agente"></span><span class="lbl">Agente</span></button>
+      <button id="btn-modelo" class="btn texto" type="button" aria-label="Cambiar de modelo"><span class="ico" data-i="modelo"></span><span class="lbl">Modelo</span></button>
     </header>
     <div id="chat-offline" class="banner-error" hidden>Sin conexión con el servidor. Reintentando…</div>
     <div id="barra-ocupado" class="barra-ocupado" hidden></div>
+    <div id="estado-vivo" class="estado-vivo" role="status" aria-live="polite" hidden><span class="ev-ico" aria-hidden="true"></span><span class="ev-txt"></span></div>
     <div id="permisos"></div>
     <div class="mensajes-caja">
       <main id="mensajes" class="mensajes" aria-live="polite"></main>
@@ -140,7 +142,7 @@
         <a href="https://build.nvidia.com/settings/api-keys" target="_blank" rel="noopener">Conseguir mi clave gratis →</a>
       </div>
       <div id="clave-guardada" class="tarjeta-ok" hidden>✓ Clave guardada solo en este servidor. Ya puedo responder.</div>
-      <button id="btn-entregas" class="entregas-barra" type="button" hidden>📁 Archivos del agente</button>
+      <button id="btn-entregas" class="entregas-barra" type="button" hidden><span class="ico" data-i="carpeta"></span> Archivos del agente</button>
       <div id="tokens-linea" class="tokens-linea" hidden></div>
       <div id="menu-comandos" class="menu-comandos" hidden></div>
       <form id="form-envio" class="composer">
@@ -185,7 +187,7 @@
     <div class="panel-cab">
       <img src="icons/logo-wichi.png" alt="" class="logo-redondo">
       <span class="panel-titulo">Wichi</span>
-      <button id="p-buscar-btn" class="icono" aria-label="Buscar conversaciones">🔍</button>
+      <button id="p-buscar-btn" class="icono" aria-label="Buscar conversaciones"><span class="ico" data-i="buscar"></span></button>
     </div>
     <input id="p-buscar" class="campo-pildora" type="search" placeholder="Buscar conversaciones" autocomplete="off" hidden>
     <nav class="panel-filas">
@@ -207,7 +209,7 @@
       <div class="pie-servidor">
         <span id="p-avatar" class="avatar">W</span>
         <span class="pie-texto"><span id="p-servidor">Servidor</span><small id="p-tipo"></small></span>
-        <button id="p-ajustes" class="icono" aria-label="Ajustes">⚙</button>
+        <button id="p-ajustes" class="icono" aria-label="Ajustes"><span class="ico" data-i="ajustes"></span></button>
       </div>
     </div>
   </aside>
@@ -221,8 +223,8 @@
     <h3 id="dlg-cuenta-titulo">Añadir cuenta</h3>
     <label class="campo">Nombre de la cuenta<input id="c-nombre" placeholder="El que tú quieras" autocomplete="off" required></label>
     <div class="fila-chips" role="radiogroup" aria-label="Tipo">
-      <label class="chipradio"><input type="radio" name="c-tipo" value="cowork" checked><span>☁ Cloud</span></label>
-      <label class="chipradio"><input type="radio" name="c-tipo" value="vps"><span>🖥 Mi VPS</span></label>
+      <label class="chipradio"><input type="radio" name="c-tipo" value="cowork" checked><span><span class="ico" data-i="nube"></span> Cloud</span></label>
+      <label class="chipradio"><input type="radio" name="c-tipo" value="vps"><span><span class="ico" data-i="servidor"></span> Mi VPS</span></label>
     </div>
     <label class="campo">Dirección<input id="c-url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…onrender.com" required></label>
     <label class="campo">Contraseña<input id="c-clave" type="password" autocomplete="off" autocapitalize="off" required></label>
@@ -377,6 +379,7 @@
   </div>
 </div>
 
+<script src="actividad.js" defer></script>
 <script src="app.js" defer></script>
 <script src="funciones.js" defer></script>
 <script src="acciones.js" defer></script>

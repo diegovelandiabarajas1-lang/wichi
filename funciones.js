@@ -1,5 +1,5 @@
 'use strict';
-const VERSION_PWA = '0.6.4';
+const VERSION_PWA = '0.7.0';
 /* Wichi PWA: funciones que igualan a la app de Android (APK).
    Modelos, comandos «/», adjuntos, archivos del agente (entregas), conectores (MCP), consumo de tokens,
    respaldo de conversaciones, renombrar/archivar/eliminar y ajustes. Todo vive en este dispositivo (IndexedDB y localStorage). */
@@ -207,15 +207,15 @@ Object.assign(Api.prototype, {
     },
     /* ───────────── modo de la conversación: Plan (solo lectura) / Build (el normal) / Auto (ejecuta todo sin preguntar) ───────────── */
     modos: [
-      { id: 'plan', icono: '📖', nombre: 'Plan', desc: 'Solo lectura: explora y propone un plan. No escribe, no ejecuta comandos ni usa la VM o el navegador.' },
-      { id: 'build', icono: '🛠', nombre: 'Build', desc: 'El normal: ejecuta lo que ya le dijiste «Sí» o «Siempre»; lo demás te lo pregunta.' },
-      { id: 'auto', icono: '⚡', nombre: 'Auto', desc: 'Ejecuta todo sin preguntarte (comandos, archivos, VM, navegador). Solo pregunta al tocar archivos de configuración del agente.' },
+      { id: 'plan', icono: '', nombre: 'Plan', desc: 'Solo lectura: explora y propone un plan. No escribe, no ejecuta comandos ni usa la VM o el navegador.' },
+      { id: 'build', icono: '', nombre: 'Build', desc: 'El normal: ejecuta lo que ya le dijiste «Sí» o «Siempre»; lo demás te lo pregunta.' },
+      { id: 'auto', icono: '', nombre: 'Auto', desc: 'Ejecuta todo sin preguntarte (comandos, archivos, VM, navegador). Solo pregunta al tocar archivos de configuración del agente.' },
     ],
     modoActual() { const m = S.actual && S.actual.modo; return m === 'plan' || m === 'auto' ? m : 'build'; },
     pintarModo() {
       const b = $('btn-modo'); if (!b) return;
       const id = this.modoActual(); const m = this.modos.find((x) => x.id === id);
-      b.textContent = m.icono + ' ' + m.nombre;
+      b.innerHTML = '<span class="ico" data-i="' + m.id + '"></span><span class="lbl">' + esc(m.nombre) + '</span>';
       b.classList.toggle('modo-plan', id === 'plan'); b.classList.toggle('modo-auto', id === 'auto');
       if (this.pintarEquipo) this.pintarEquipo();
     },
@@ -226,7 +226,7 @@ Object.assign(Api.prototype, {
       for (const m of this.modos) {
         const b = document.createElement('button');
         b.className = 'btn ancho opcion' + (m.id === actual ? ' elegido' : '');
-        b.innerHTML = `<span>${m.icono} ${esc(m.nombre)}</span><small>${esc(m.desc)}</small>`;
+        b.innerHTML = `<span><span class="ico" data-i="${m.id}"></span> ${esc(m.nombre)}</span><small>${esc(m.desc)}</small>`;
         b.addEventListener('click', () => {
           $('dlg-modo').close();
           if (m.id === actual) return;
@@ -253,10 +253,10 @@ Object.assign(Api.prototype, {
       const on = !!(S.actual && S.actual.equipo);
       b.hidden = !S.actual || S.actual.modo === 'plan';
       const n = on && this.equipo && this.equipo.miembros ? this.equipo.miembros.length : 0;
-      b.textContent = '👥' + (n ? ' ' + n : '');
+      b.innerHTML = '<span class="ico" data-i="equipo"></span><span class="lbl">Equipo</span>' + (n ? ' ' + n : '');
       b.classList.toggle('modo-equipo', on);
     },
-    estadoMiembro(e) { return ({ trabajando: '⏳ trabajando', 'en-cola': '⌛ en cola', esperando: '⏸ esperando respuesta', listo: '✔ listo', fallo: '✖ falló', detenido: '■ detenido' })[e] || e; },
+    estadoMiembro(e) { return ({ trabajando: 'trabajando', 'en-cola': 'en cola', esperando: 'esperando respuesta', listo: '✓ listo', fallo: '✗ falló', detenido: '■ detenido' })[e] || e; },
     async cargarEquipo() {
       if (!S.actual || !S.actual.equipo) return;
       try { const r = await S.api.call('GET', `/api/session/${S.actual.id}/equipo`); this.equipo = (r && r.data) || null; this.pintarEquipo(); } catch (e) { /* servidor anterior al modo Equipo */ }
@@ -279,10 +279,10 @@ Object.assign(Api.prototype, {
         for (const m of ms) {
           const d = document.createElement('div'); d.className = 'opcion-equipo';
           const zona = (m.zona || []).length ? ' · zona ' + m.zona.join(', ') : ' · solo lectura';
-          d.innerHTML = `<b>${esc(m.nombre)}${m.rol ? ' · ' + esc(m.rol) : ''}</b><br><small>${esc(this.estadoMiembro(m.estado))}${m.vm ? ' · 🖥 VM' : ''}${esc(zona)} · ${Math.round((m.tokens || 0) / 1000)} k tokens</small>`;
+          d.innerHTML = `<b>${esc(m.nombre)}${m.rol ? ' · ' + esc(m.rol) : ''}</b><br><small>${esc(this.estadoMiembro(m.estado))}${m.vm ? ' · VM' : ''}${esc(zona)} · ${Math.round((m.tokens || 0) / 1000)} k tokens</small>`;
           cuerpo.appendChild(d);
         }
-        if (t) p(`Rondas ${t.rondas}/${t.maxRondas} · tokens ${Math.round(t.tokens / 1000)} k de ${Math.round(t.maxTokens / 1000)} k${t.limite ? ' · ⚠ tope alcanzado' : ''}`, 't-suave t-pequeno');
+        if (t) p(`Rondas ${t.rondas}/${t.maxRondas} · tokens ${Math.round(t.tokens / 1000)} k de ${Math.round(t.maxTokens / 1000)} k${t.limite ? ' · tope alcanzado' : ''}`, 't-suave t-pequeno');
         const no = document.createElement('button'); no.className = 'btn texto ancho'; no.textContent = 'Apagar el modo Equipo';
         no.addEventListener('click', () => { $('dlg-equipo').close(); void this.cambiarEquipo(false); }); cuerpo.appendChild(no);
       }
@@ -311,7 +311,7 @@ Object.assign(Api.prototype, {
       const Voz = window.SpeechRecognition || window.webkitSpeechRecognition;
       cont.innerHTML = `<div class="tarjeta"><h3>Mi Wichi</h3>
         <p>Se guarda en tu servidor, así el celular, el PC y la web usan lo mismo. Los agentes propios, los ganchos y la memoria se editan en Wichi para PC (Ajustes → Cuenta → Mi Wichi).</p>
-        <label class="campo"><span>Nombre de voz (cómo lo llamas)</span><span class="con-boton"><input id="mw-nombre" type="text" autocomplete="off" autocapitalize="off" value="${esc(p.vozNombre || 'wichi')}">${Voz ? '<button type="button" id="mw-decir">🎤 Decirlo</button>' : ''}</span></label>
+        <label class="campo"><span>Nombre de voz (cómo lo llamas)</span><span class="con-boton"><input id="mw-nombre" type="text" autocomplete="off" autocapitalize="off" value="${esc(p.vozNombre || 'wichi')}">${Voz ? '<button type="button" id="mw-decir">Decirlo</button>' : ''}</span></label>
         <p class="suave" id="mw-voz-ayuda">${Voz ? 'Escríbelo o pulsa «Decirlo» y tu navegador lo transcribe (en Chrome para Android lo hace Google; en el iPhone, Apple). En el celular con la app Android, «Hey …» lo usa para activarse.' : 'Este navegador no puede transcribir voz: escribe el nombre.'}</p>
         <label class="campo"><span><input type="checkbox" id="mw-pers-on" ${pers.activa ? 'checked' : ''}> Usar mi propia personalidad (system prompt)</span></label>
         <textarea id="mw-pers" rows="5" style="width:100%" placeholder="Eres Jarvis, un mayordomo ingenioso y breve…">${esc(pers.texto || '')}</textarea>
@@ -383,7 +383,7 @@ Object.assign(Api.prototype, {
         el.innerHTML = '';
         this.adjuntos.forEach((a, i) => {
           const c = document.createElement('span'); c.className = 'chip-adj';
-          c.textContent = (a.esImagen ? '🖼 ' : '📎 ') + a.name;
+          c.textContent = a.name;
           const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Quitar ' + a.name);
           x.addEventListener('click', () => { this.adjuntos.splice(i, 1); this.pintarAdjuntos(); });
           c.appendChild(x); el.appendChild(c);
@@ -445,7 +445,7 @@ Object.assign(Api.prototype, {
         const r = await S.api.get('/api/fs/list?path=' + enc(dirDe() + '/entregas'));
         this.entregas = ((r && r.data) || []).filter((x) => x.type === 'file').map((x) => String(x.path).split('/').pop()).sort();
       } catch { this.entregas = []; }
-      const be = $('btn-entregas'); be.hidden = !this.entregas.length; be.classList.toggle('con-algo', this.entregas.length > 0); be.textContent = '📁 Archivos del agente (' + this.entregas.length + ')';
+      const be = $('btn-entregas'); be.hidden = !this.entregas.length; be.classList.toggle('con-algo', this.entregas.length > 0); be.innerHTML = '<span class="ico" data-i="carpeta"></span> Archivos del agente (' + this.entregas.length + ')';
       if (!silencioso) this.pintarEntregas();
     },
     pintarEntregas() {
@@ -698,7 +698,7 @@ Object.assign(Api.prototype, {
       const c = S.cuenta; const ses = Sesion.leer();
       const estadoSw = !('serviceWorker' in navigator) ? 'no disponible en este navegador' : (navigator.serviceWorker.controller ? 'activo' : 'se activa al abrirla otra vez');
       const servidor = c ? esc(c.name || c.url) : 'este servidor';
-      const cuentas = Cuentas.lista.map((x, i) => `<div class="item col"><div class="txt"><div class="t1">${x.kind === 'cowork' ? '☁' : '🖥'} ${esc(x.name)}</div><div class="t2">${esc(x.url)}</div></div>
+      const cuentas = Cuentas.lista.map((x, i) => `<div class="item col"><div class="txt"><div class="t1">${x.kind === 'cowork' ? '<span class="ico" data-i="nube"></span>' : '<span class="ico" data-i="servidor"></span>'} ${esc(x.name)}</div><div class="t2">${esc(x.url)}</div></div>
           <button class="mini" type="button" data-cr="${i}">Renombrar</button><button class="mini" type="button" data-cq="${i}">QR</button><button class="mini" type="button" data-co="${i}">Olvidar</button></div>`).join('');
       $('aj-cuerpo').innerHTML = `
         <div class="tarjeta"><h3>Avisarme del agente</h3>
@@ -720,7 +720,7 @@ Object.assign(Api.prototype, {
         <div id="aj-spotify"></div>
         <div class="tarjeta"><h3>Conectores</h3>
           <p>Conecta apps con API (servidores MCP) al servidor: el agente podrá usarlas como herramientas. La llave se guarda en el servidor y una copia en este dispositivo, para volver a ponerla si Render reinicia.</p>
-          <div id="aj-conectores">${this.conectores.length ? this.conectores.map((x) => `<div class="item"><div class="txt"><div class="t1">${esc(x.name)}</div><div class="t2">${esc(x.estado)}${x.detalle ? ' · ' + esc(x.detalle) : ''}</div></div><button class="mini" type="button" data-q="${esc(x.name)}">Quitar</button></div>`).join('') : '<p>Ninguno todavía.</p>'}</div>
+          <div id="aj-conectores">${this.conectores.length ? this.conectores.map((x) => `<div class="item"><div class="txt"><div class="t1">${x.kind === 'cowork' ? '<span class="ico" data-i="nube"></span>' : '<span class="ico" data-i="servidor"></span>'} ${esc(x.name)}</div><div class="t2">${esc(x.estado)}${x.detalle ? ' · ' + esc(x.detalle) : ''}</div></div><button class="mini" type="button" data-q="${esc(x.name)}">Quitar</button></div>`).join('') : '<p>Ninguno todavía.</p>'}</div>
           <div class="fila-btn"><button class="btn tonal" id="aj-add-con" type="button">＋ Añadir conector</button></div></div>
         <div class="tarjeta"><h3>Copia de seguridad</h3>
           <p>Si tu servidor gratuito se reinicia y pierde las conversaciones, esta app las devuelve (se guardan en este dispositivo). <span id="aj-resp-n"></span></p>
