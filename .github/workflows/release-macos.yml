@@ -1,6 +1,7 @@
 name: Build Wichi macOS Release
 
-on:
+on:  
+workflow_dispatch:
   release:
     types: [published]
 
