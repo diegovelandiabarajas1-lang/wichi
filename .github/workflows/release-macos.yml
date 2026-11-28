@@ -1,0 +1,32 @@
+name: Build Wichi macOS Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore src/Wichi.App/Wichi.App.csproj
+
+      - name: Publish Wichi macOS (Release)
+        run: dotnet publish src/Wichi.App/Wichi.App.csproj -c Release -r osx-arm64 --self-contained false -p:UseAppHost=false -o ./Wichi-macOS.app
+
+      - name: Create tar.gz archive
+        run: tar -czf Wichi-macOS.tar.gz Wichi-macOS.app/
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: Wichi-macOS.tar.gz
