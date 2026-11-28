@@ -18,14 +18,31 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Find project file
+        id: find-proj
+        run: |
+          CSPROJ=$(find . -maxdepth 4 -name "*.csproj" | head -n 1)
+          if [ -z "$CSPROJ" ]; then
+            echo "Error: No se encontró ningún archivo .csproj en el repositorio."
+            exit 1
+          fi
+          echo "Encontrado: $CSPROJ"
+          echo "path=$CSPROJ" >> "$GITHUB_OUTPUT"
+
       - name: Restore dependencies
-        run: dotnet restore src/Wichi.App/Wichi.App.csproj
+        run: dotnet restore "${{ steps.find-proj.outputs.path }}"
 
       - name: Publish Wichi macOS (Release)
-        run: dotnet publish src/Wichi.App/Wichi.App.csproj -c Release -r osx-arm64 --self-contained false -p:UseAppHost=false -o ./Wichi-macOS.app
+        run: dotnet publish "${{ steps.find-proj.outputs.path }}" -c Release -r osx-arm64 --self-contained false -p:UseAppHost=false -o ./Wichi-macOS.app
 
       - name: Create tar.gz archive
         run: tar -czf Wichi-macOS.tar.gz Wichi-macOS.app/
+
+      - name: Upload artifact (manual runs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wichi-macOS
+          path: Wichi-macOS.tar.gz
 
       - name: Upload release asset
         if: github.event_name == 'release'
