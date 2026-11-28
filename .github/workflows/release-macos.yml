@@ -1,6 +1,7 @@
 name: Build Wichi macOS Release
 
 on:
+  workflow_dispatch:
   release:
     types: [published]
 
@@ -27,6 +28,7 @@ jobs:
         run: tar -czf Wichi-macOS.tar.gz Wichi-macOS.app/
 
       - name: Upload release asset
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
           files: Wichi-macOS.tar.gz
